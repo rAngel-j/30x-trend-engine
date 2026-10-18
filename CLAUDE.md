@@ -118,4 +118,6 @@ Cuando el usuario te pida iniciar, ejecuta en este orden:
 - [x] Fase 4 — Interfaz Dinámica y Filtrable
 - [x] Fase 5 — Auditoría y README final
 
+- [x] Iteraciones posteriores — Radar semanal de temas, privacidad, cumplimiento, perfiles de marca, modo oscuro y preparación de la demo (`docs/DEMO.md`)
+
 Ver `docs/CHANGELOG.md` para el detalle de cada entrega.

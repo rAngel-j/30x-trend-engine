@@ -1,21 +1,21 @@
 /**
- * Adaptador al ADN de 30X (pregunta C, parte 2):
- * Reel para @andresbilbao (IG/TikTok) + Carrusel táctico para @30x (IG/LinkedIn).
- * Las reglas de estilo se leen de docs/30X_BRAND_DNA.md en cada llamada (editable sin desplegar).
+ * Adaptación al ADN del perfil de marca (pregunta C, parte 2):
+ * Reel en la voz personal del perfil (p. ej. @andresbilbao) + carrusel en la voz de marca (p. ej. @30x).
+ * Las reglas de estilo vienen del campo `dna` del perfil (docs/ARCHITECTURE.md §7b-quinquies).
+ * El análisis en lote (batch-analyzer.ts) usa este esquema y su validador.
  */
 import { Type, type Schema } from "@google/genai";
 import { z } from "zod";
-import { describeSignal, generateStructured, GROUNDING_RULES, loadBrandDna } from "./gemini-client";
-import type { BrandAdaptations, ForensicAutopsy, JevResult, StagedSignal } from "@/types/trends";
+import type { BrandAdaptations } from "@/types/trends";
 
 const str = (description: string): Schema => ({ type: Type.STRING, description });
 
 export const ADAPTATION_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    andres_bilbao_reel: {
+    personal_reel: {
       type: Type.OBJECT,
-      description: "Guion de Reel para @andresbilbao siguiendo el ADN §3.",
+      description: "Guion de Reel en la VOZ PERSONAL del perfil, siguiendo su ADN.",
       properties: {
         hook: str("Gancho de ≤ 12 palabras para los primeros 3 segundos."),
         beats: {
@@ -27,7 +27,7 @@ export const ADAPTATION_SCHEMA: Schema = {
             type: Type.OBJECT,
             properties: {
               second: { type: Type.INTEGER, minimum: 0, maximum: 90, description: "Segundo en que empieza el bloque." },
-              line: str("Lo que dice Andrés, textual."),
+              line: str("Lo que dice la voz personal, textual."),
               on_screen_text: str("Texto en pantalla, máximo 6 palabras."),
             },
             required: ["second", "line", "on_screen_text"],
@@ -40,9 +40,9 @@ export const ADAPTATION_SCHEMA: Schema = {
       required: ["hook", "beats", "cta", "duration_seconds"],
       propertyOrdering: ["hook", "beats", "cta", "duration_seconds"],
     },
-    x30_carousel: {
+    brand_carousel: {
       type: Type.OBJECT,
-      description: "Carrusel táctico para @30x siguiendo el ADN §4.",
+      description: "Carrusel táctico en la VOZ DE MARCA del perfil, siguiendo su ADN.",
       properties: {
         title: str("Promesa concreta de la slide 1."),
         slides: {
@@ -72,20 +72,20 @@ export const ADAPTATION_SCHEMA: Schema = {
     },
     publish_window: str("Cuándo publicar y por qué, según la etapa (p. ej. 'en las próximas 48 h: aún no hay piezas en español')."),
   },
-  required: ["andres_bilbao_reel", "x30_carousel", "contrarian_angle", "publish_window"],
-  propertyOrdering: ["andres_bilbao_reel", "x30_carousel", "contrarian_angle", "publish_window"],
+  required: ["personal_reel", "brand_carousel", "contrarian_angle", "publish_window"],
+  propertyOrdering: ["personal_reel", "brand_carousel", "contrarian_angle", "publish_window"],
 };
 
 const text = z.string().trim().min(1);
 
 export const AdaptationValidator = z.object({
-  andres_bilbao_reel: z.object({
+  personal_reel: z.object({
     hook: text,
     beats: z.array(z.object({ second: z.number().int().min(0).max(90), line: text, on_screen_text: text })).min(4).max(10),
     cta: text,
     duration_seconds: z.number().int().min(15).max(90),
   }),
-  x30_carousel: z.object({
+  brand_carousel: z.object({
     title: text,
     slides: z.array(z.object({ headline: text, body: text })).min(6).max(9),
     caption: text,
@@ -95,43 +95,19 @@ export const AdaptationValidator = z.object({
   publish_window: text,
 });
 
-function saturatedValidator(stage: StagedSignal["stage"]): z.ZodType<BrandAdaptations> {
-  return stage === "saturated"
-    ? AdaptationValidator.refine((a) => a.contrarian_angle !== null, {
-        message: "contrarian_angle es obligatorio para tendencias saturadas",
-        path: ["contrarian_angle"],
-      })
-    : AdaptationValidator;
-}
+type LegacyAdaptations = Omit<BrandAdaptations, "personal_reel" | "brand_carousel"> & {
+  andres_bilbao_reel?: BrandAdaptations["personal_reel"];
+  x30_carousel?: BrandAdaptations["brand_carousel"];
+  personal_reel?: BrandAdaptations["personal_reel"];
+  brand_carousel?: BrandAdaptations["brand_carousel"];
+};
 
-export async function adaptToBrandDna(
-  signal: StagedSignal,
-  forensic: ForensicAutopsy,
-  jev: JevResult,
-  content?: string,
-): Promise<BrandAdaptations> {
-  const dna = await loadBrandDna();
-  const autopsy = JSON.stringify({ forensic, jev_latam_score: jev.jev_latam_score, jev_rationale: jev.breakdown.rationale }, null, 2);
-
-  return generateStructured({
-    task: "bilbao-adapter",
-    system: `Eres el guionista principal de 30X. Adaptas la MECÁNICA de piezas que funcionaron (gancho, formato, tesis) al ADN de @andresbilbao y @30x.
-Nunca copias el texto original: reescribes desde cero para ejecutivos y equipos de Latinoamérica.
-${GROUNDING_RULES}
-
-ADN DE MARCA (cumplimiento obligatorio):
-${dna}`,
-    prompt: `Etapa de la tendencia: ${signal.stage}. ${signal.stage === "saturated" ? "Es OBLIGATORIO entregar un contrarian_angle." : ""}
-
-AUTOPSIA YA REALIZADA:
-${autopsy}
-
-FICHA DE LA PIEZA REFERENTE:
-${describeSignal(signal, content)}
-
-Genera el Reel para @andresbilbao, el carrusel para @30x, el ángulo contrarian y la ventana de publicación.`,
-    schema: ADAPTATION_SCHEMA,
-    validator: saturatedValidator(signal.stage),
-    temperature: 0.8,
-  });
+/** Lee guiones guardados por versiones anteriores (andres_bilbao_reel / x30_carousel) con los nombres actuales. */
+export function normalizeAdaptations(value: unknown): BrandAdaptations | null {
+  if (!value || typeof value !== "object") return null;
+  const a = value as LegacyAdaptations;
+  const personal = a.personal_reel ?? a.andres_bilbao_reel;
+  const brand = a.brand_carousel ?? a.x30_carousel;
+  if (!personal || !brand) return null;
+  return { personal_reel: personal, brand_carousel: brand, contrarian_angle: a.contrarian_angle ?? null, publish_window: a.publish_window ?? "" };
 }

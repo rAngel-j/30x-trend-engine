@@ -2,8 +2,6 @@
  * Cliente único de Gemini. Todas las llamadas usan Structured Outputs (responseSchema)
  * y se validan con Zod; si la respuesta no cumple, se reintenta una vez.
  */
-import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
 import { GoogleGenAI, type Schema } from "@google/genai";
 import type { z } from "zod";
 import { GEMINI_MODEL, requireEnv } from "@/lib/env";
@@ -140,17 +138,6 @@ export function describeSignal(signal: StagedSignal, content?: string): string {
     lines.push("", "CONTENIDO COMPLETO (lectura pública):", content.slice(0, 10_000));
   }
   return lines.join("\n");
-}
-
-// ── ADN de marca (docs/30X_BRAND_DNA.md como configuración viva) ────
-
-let dnaCache: { mtimeMs: number; text: string } | null = null;
-
-export async function loadBrandDna(): Promise<string> {
-  const path = resolve(process.cwd(), "docs", "30X_BRAND_DNA.md");
-  const { mtimeMs } = await stat(path);
-  if (dnaCache?.mtimeMs !== mtimeMs) dnaCache = { mtimeMs, text: await readFile(path, "utf8") };
-  return dnaCache.text;
 }
 
 export const GROUNDING_RULES = `Reglas de rigor:

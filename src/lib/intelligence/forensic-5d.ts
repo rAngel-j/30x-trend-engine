@@ -1,11 +1,11 @@
 /**
  * Autopsia forense de las 5 variables (pregunta B: "¿por qué funcionó?").
- * Gancho · Formato · Tema · Momento · Autor vs. contenido.
+ * Gancho · Formato · Tema · Momento · Autor vs. contenido. Esquema y reglas; la llamada la hace batch-analyzer.ts.
  */
 import { Type, type Schema } from "@google/genai";
 import { z } from "zod";
-import { describeSignal, generateStructured, GROUNDING_RULES } from "./gemini-client";
-import { FORMAT_TYPES, type ForensicAutopsy, type StagedSignal } from "@/types/trends";
+import { GROUNDING_RULES } from "./gemini-client";
+import { FORMAT_TYPES, type BrandProfile, type ForensicAutopsy } from "@/types/trends";
 
 const str = (description: string): Schema => ({ type: Type.STRING, description });
 
@@ -78,7 +78,7 @@ export const ForensicValidator = z.object({
   author_vs_content: z.object({ verdict: z.enum(["author_driven", "content_driven", "balanced"]), explanation: text }),
 });
 
-export const FORENSIC_SYSTEM = `Eres el analista forense de contenido de 30X, la escuela de IA para líderes de Latinoamérica.
+export const forensicSystem = (profile: Pick<BrandProfile, "name" | "audience">) => `Eres el analista forense de contenido de ${profile.name}, que le habla a: ${profile.audience}.
 Tu trabajo es explicar con rigor por qué una pieza de contenido funcionó, desglosando exactamente 5 variables.
 ${GROUNDING_RULES}
 - Para "author_vs_content" usa los datos cuantitativos: Outlier Score alto y peso del autor bajo ⇒ el mérito es del contenido; Outlier ≈ 1 y peso alto ⇒ lo explica la audiencia del autor. Sin datos cuantitativos, razona con seguidores y engagement disponibles y declara la incertidumbre.`;
@@ -89,17 +89,4 @@ export function verdictFromWeight(weight: number | null): ForensicAutopsy["autho
   if (weight >= 0.66) return "author_driven";
   if (weight <= 0.33) return "content_driven";
   return "balanced";
-}
-
-export async function runForensic5D(signal: StagedSignal, content?: string): Promise<ForensicAutopsy> {
-  const result = await generateStructured({
-    task: "forensic-5d",
-    system: FORENSIC_SYSTEM,
-    prompt: `Realiza la autopsia de las 5 variables de esta pieza.\n\n${describeSignal(signal, content)}`,
-    schema: FORENSIC_SCHEMA,
-    validator: ForensicValidator,
-    temperature: 0.3,
-  });
-  const verdict = verdictFromWeight(signal.author_weight);
-  return verdict ? { ...result, author_vs_content: { ...result.author_vs_content, verdict } } : result;
 }

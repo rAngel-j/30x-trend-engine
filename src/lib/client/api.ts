@@ -2,7 +2,7 @@
  * Llamadas del navegador a las API Routes. Sin dependencias de servidor:
  * este módulo solo importa tipos y constantes puras.
  */
-import type { FormatType, Network, RadarResult, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
+import type { BrandProfile, BrandProfileInput, FormatType, Network, RadarResult, SavedView, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
 
 export class ApiError extends Error {
   constructor(
@@ -30,7 +30,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 // ── Filtros ⇄ querystring ──────────────────────────────────────────
 
-const LIST_KEYS = ["networks", "stages", "formats", "languages", "statuses"] as const;
+const LIST_KEYS = ["networks", "stages", "formatHints", "formats", "languages", "statuses"] as const;
 const NUMBER_KEYS = ["windowDays", "minJev", "maxJev", "minOutlier", "limit", "offset"] as const;
 
 export function filtersToQuery(filters: TrendFilters): string {
@@ -73,8 +73,8 @@ export interface TrendPageResponse {
   repository: "supabase" | "sqlite";
 }
 
-export const listTrends = (filters: TrendFilters, signal?: AbortSignal) =>
-  request<TrendPageResponse>(`/api/discover?${filtersToQuery(filters)}`, { signal });
+export const listTrends = (filters: TrendFilters, profileId: string | null, signal?: AbortSignal) =>
+  request<TrendPageResponse>(`/api/discover?${filtersToQuery(filters)}${profileId ? `&profile=${encodeURIComponent(profileId)}` : ""}`, { signal });
 
 export interface DiscoverResponse {
   items: TrendSignal[];
@@ -87,7 +87,7 @@ export interface DiscoverResponse {
   took_ms: number;
 }
 
-export const discover = (body: { query: string; networks: Network[]; windowDays: number; analyzeTop?: number }) =>
+export const discover = (body: { query: string; networks: Network[]; windowDays: number; analyzeTop?: number; profileId?: string }) =>
   request<DiscoverResponse>("/api/discover", { method: "POST", body: JSON.stringify(body) });
 
 export interface AnalyzeUrlResponse {
@@ -97,7 +97,7 @@ export interface AnalyzeUrlResponse {
   cached: boolean;
 }
 
-export const analyzeUrl = (body: { url: string; text?: string; force?: boolean } | { id: string; force?: boolean }) =>
+export const analyzeUrl = (body: ({ url: string; text?: string } | { id: string }) & { force?: boolean; profileId?: string }) =>
   request<AnalyzeUrlResponse>("/api/analyze-url", { method: "POST", body: JSON.stringify(body) });
 
 export type ExportTarget = "slack" | "notion" | "make";
@@ -129,11 +129,6 @@ export interface ServerStatus {
 
 export const getStatus = () => request<ServerStatus>("/api/status");
 
-export const getBrandDna = () => request<{ content: string; updated_at: string; editable: boolean }>("/api/brand-dna");
-
-export const saveBrandDna = (content: string) =>
-  request<{ updated_at: string }>("/api/brand-dna", { method: "PUT", body: JSON.stringify({ content }) });
-
 // ── Configuración local (solo este navegador) ──────────────────────
 
 const OVERRIDES_KEY = "30x.exportOverrides";
@@ -160,7 +155,47 @@ export type { FormatType };
 
 // ── Radar semanal ──────────────────────────────────────────────────
 
-export const getLatestRadar = () => request<RadarResult>("/api/radar");
+export const getLatestRadar = (profileId: string | null) =>
+  request<RadarResult>(`/api/radar${profileId ? `?profile=${encodeURIComponent(profileId)}` : ""}`);
 
-export const runRadarNow = (body: { networks: Network[]; maxTopics?: number }) =>
+export const runRadarNow = (body: { networks: Network[]; maxTopics?: number; profileId?: string }) =>
   request<RadarResult>("/api/radar", { method: "POST", body: JSON.stringify(body) });
+
+// ── Perfiles de marca ──────────────────────────────────────────────
+
+export const listProfiles = () => request<{ items: BrandProfile[]; default_id: string }>("/api/profiles");
+
+export const createProfile = (input: BrandProfileInput) =>
+  request<{ item: BrandProfile }>("/api/profiles", { method: "POST", body: JSON.stringify(input) });
+
+export const updateProfile = (id: string, input: Partial<BrandProfileInput>) =>
+  request<{ item: BrandProfile }>(`/api/profiles/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) });
+
+export const deleteProfile = (id: string) => request<unknown>(`/api/profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+const PROFILE_KEY = "30x.profile";
+
+export function loadActiveProfileId(): string | null {
+  try {
+    return window.localStorage.getItem(PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function storeActiveProfileId(id: string): void {
+  try {
+    window.localStorage.setItem(PROFILE_KEY, id);
+  } catch {
+    /* sin almacenamiento: se usa el perfil por defecto */
+  }
+}
+
+// ── Vistas guardadas ───────────────────────────────────────────────
+
+export const listViews = (profileId: string) => request<{ items: SavedView[] }>(`/api/views?profile=${encodeURIComponent(profileId)}`);
+
+export const createView = (profileId: string, name: string, filters: TrendFilters) =>
+  request<{ item: SavedView }>("/api/views", { method: "POST", body: JSON.stringify({ profileId, name, filters }) });
+
+export const deleteView = (id: string) => request<unknown>(`/api/views/${encodeURIComponent(id)}`, { method: "DELETE" });

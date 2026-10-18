@@ -5,7 +5,7 @@
 import { SourceError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
 import type { TrendSignal } from "@/types/trends";
-import { fiveVariables, NETWORK_LABEL, STAGE_LABEL, truncate } from "./format";
+import { fiveVariables, NETWORK_LABEL, STAGE_LABEL, truncate, voiceLabels } from "./format";
 
 const API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
@@ -88,13 +88,14 @@ export function buildNotionBlocks(signal: TrendSignal): Record<string, unknown>[
     if (jev.breakdown.red_flags.length) blocks.push(paragraph(`Banderas rojas: ${jev.breakdown.red_flags.join(" · ")}`));
   }
   const ad = signal.analysis?.adaptations;
+  const voices = voiceLabels(signal);
   if (ad) {
-    blocks.push(heading(`Reel @andresbilbao (${ad.andres_bilbao_reel.duration_seconds} s)`), paragraph(`Gancho: ${ad.andres_bilbao_reel.hook}`));
-    for (const b of ad.andres_bilbao_reel.beats) blocks.push(numbered(`[${b.second}s] ${b.line} — En pantalla: ${b.on_screen_text}`));
-    blocks.push(paragraph(`CTA: ${ad.andres_bilbao_reel.cta}`));
-    blocks.push(heading(`Carrusel @30x: ${ad.x30_carousel.title}`));
-    for (const s of ad.x30_carousel.slides) blocks.push(numbered(`${s.headline} — ${s.body}`));
-    blocks.push(paragraph(`Caption: ${ad.x30_carousel.caption}`), paragraph(`CTA: ${ad.x30_carousel.cta}`));
+    blocks.push(heading(`Reel ${voices.personal} (${ad.personal_reel.duration_seconds} s)`), paragraph(`Gancho: ${ad.personal_reel.hook}`));
+    for (const b of ad.personal_reel.beats) blocks.push(numbered(`[${b.second}s] ${b.line} — En pantalla: ${b.on_screen_text}`));
+    blocks.push(paragraph(`CTA: ${ad.personal_reel.cta}`));
+    blocks.push(heading(`Carrusel ${voices.brand}: ${ad.brand_carousel.title}`));
+    for (const s of ad.brand_carousel.slides) blocks.push(numbered(`${s.headline} — ${s.body}`));
+    blocks.push(paragraph(`Caption: ${ad.brand_carousel.caption}`), paragraph(`CTA: ${ad.brand_carousel.cta}`));
     if (ad.contrarian_angle) blocks.push(heading("Ángulo contrarian"), paragraph(ad.contrarian_angle));
     blocks.push(paragraph(`Ventana de publicación: ${ad.publish_window}`));
   }

@@ -1,19 +1,18 @@
 /**
- * Radar semanal: los temas de IA que más crecen esta semana, por qué y cómo adaptarlos.
- * Responde el entregable del reto. Flujo y fórmulas: docs/ARCHITECTURE.md §7b-quater.
+ * Radar semanal: los temas que más crecen esta semana para un perfil de marca, por qué y cómo adaptarlos.
+ * Responde el entregable del reto. Flujo y fórmulas: docs/ARCHITECTURE.md §7b-quater; perfiles: §7b-quinquies.
  */
 import type { NewRadarTopic, TrendRepository } from "@/lib/db/supabase";
 import { requireEnv } from "@/lib/env";
-import { errorMessage, InvalidInputError } from "@/lib/errors";
+import { InvalidInputError } from "@/lib/errors";
 import { mapWithConcurrency } from "@/lib/http";
-import { loadBrandDna } from "@/lib/intelligence/gemini-client";
 import { clusterTopics } from "@/lib/intelligence/topic-clusterer";
 import { computeTopicGrowth, pickRepresentative, topicScore } from "@/lib/intelligence/topic-growth";
 import { evaluateStage } from "@/lib/intelligence/trend-stage";
-import { analyzeStoredBatch } from "@/lib/pipeline";
+import { analyzedFor, analyzeStoredBatch } from "@/lib/pipeline";
 import { collectSignals, mergeReports } from "@/lib/sources";
 import { canonicalizeUrl } from "@/lib/url";
-import type { Network, RadarResult, SourceReport, StagedSignal, TrendSignal } from "@/types/trends";
+import type { BrandProfile, Network, RadarResult, SourceReport, StagedSignal, TrendSignal } from "@/types/trends";
 
 const NETWORK_NAMES: Record<Network, string> = { youtube: "YouTube", linkedin: "LinkedIn", instagram: "Instagram", tiktok: "TikTok", web: "Web" };
 
@@ -23,26 +22,18 @@ const PER_SOURCE = 15;
 const SEED_CONCURRENCY = 3;
 const EXTRA_CANDIDATES = 2;
 
-/** Lee las semillas de la sección "Semillas del Radar semanal" de docs/30X_BRAND_DNA.md. */
-export async function loadRadarSeeds(): Promise<string[]> {
-  const dna = await loadBrandDna();
-  const start = dna.search(/^##\s+\d*\.?\s*Semillas del Radar/im);
-  if (start < 0) throw new InvalidInputError("El ADN de marca no tiene la sección 'Semillas del Radar semanal'.");
-  const section = dna.slice(start).split(/\n##\s/)[0]!;
-  const seeds = [...section.matchAll(/^\s*-\s+(.+?)\s*$/gm)].map((m) => m[1]!).filter((s) => s.length >= 2 && s.length <= 200);
-  if (seeds.length === 0) throw new InvalidInputError("La sección de semillas del Radar está vacía.");
-  return [...new Set(seeds)].slice(0, 16);
-}
-
 export interface RadarOptions {
   networks: Exclude<Network, "web">[];
   maxTopics: number;
+  profile: BrandProfile;
 }
 
 export async function runRadar(repo: TrendRepository, options: RadarOptions): Promise<RadarResult> {
   const started = Date.now();
   requireEnv("GEMINI_API_KEY", "El Radar semanal (agrupar piezas en temas)");
-  const seeds = await loadRadarSeeds();
+  const { profile } = options;
+  const seeds = profile.seeds;
+  if (seeds.length < 2) throw new InvalidInputError(`El perfil ${profile.name} necesita al menos 2 semillas para el radar.`);
   const notes: string[] = [];
 
   // 1. Ingesta: una búsqueda de 14 días por semilla.
@@ -62,7 +53,7 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
 
   // 2. Temas: Gemini agrupa; el código mide.
   const recentFirst = [...stored].sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
-  const clusters = stored.length >= 2 ? await clusterTopics(recentFirst) : [];
+  const clusters = stored.length >= 2 ? await clusterTopics(recentFirst, profile) : [];
   if (clusters.length === 0) notes.push("No hubo piezas suficientes para formar temas. Revisa las fuentes conectadas o amplía las semillas.");
 
   const now = Date.now();
@@ -111,7 +102,7 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
   const needsAnalysis = (c: (typeof withRep)[number]) => {
     const rep = c.rep;
     if (!rep) return false;
-    if (rep.analysis_status !== "analyzed") return true;
+    if (!analyzedFor(rep, profile)) return true;
     if (rep.analysis?.scripts_error) return true; // guiones que fallaron en una corrida anterior
     const scripts = rep.analysis?.adaptations;
     return c.stage.stage === "saturated" && Boolean(scripts) && !scripts!.contrarian_angle;
@@ -119,7 +110,7 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
   const pending = withRep.filter(needsAnalysis).map((c) => c.rep!);
   // Los guiones obedecen la etapa del TEMA: si está saturado, el ángulo contrarian es obligatorio.
   const topicStage = new Map(withRep.filter((c) => c.rep).map((c) => [c.rep!.id, c.stage.stage]));
-  const fresh = new Map((await analyzeStoredBatch(repo, pending, topicStage)).map((s) => [s.id, s]));
+  const fresh = new Map((await analyzeStoredBatch(repo, pending, profile, topicStage)).map((s) => [s.id, s]));
   const analyzed = withRep.map((c) => ({ ...c, rep: c.rep ? fresh.get(c.rep.id) ?? c.rep : null }));
   const failed = analyzed.filter((c) => c.rep?.analysis_status === "failed");
   if (failed.length) notes.push(`${failed.length} de ${analyzed.length} temas quedaron sin autopsia: ${failed[0]!.rep!.analysis_error}`);
@@ -147,7 +138,7 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
     .map((t, i) => ({ ...t, rank: i + 1 }));
 
   return repo.saveRadar(
-    { networks: options.networks, seeds, signals_found: stored.length, sources, notes: [...new Set(notes)], took_ms: Date.now() - started },
+    { profile_id: profile.id, networks: options.networks, seeds, signals_found: stored.length, sources, notes: [...new Set(notes)], took_ms: Date.now() - started },
     topics,
   );
 }

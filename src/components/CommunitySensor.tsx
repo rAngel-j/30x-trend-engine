@@ -9,12 +9,13 @@ import type { TrendSignal } from "@/types/trends";
 const LEGACY_NAME_KEY = "30x.sensorName";
 
 interface CommunitySensorProps {
+  profileId: string | null;
   onAnalyzed: (item: TrendSignal) => void;
 }
 
 type Feedback = { tone: "ok" | "warn" | "error"; text: string } | null;
 
-export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
+export default function CommunitySensor({ profileId, onAnalyzed }: CommunitySensorProps) {
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,7 @@ export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
     setBusy(true);
     setFeedback(null);
     try {
-      const res = await analyzeUrl({ url: url.trim(), text: text.trim() || undefined });
+      const res = await analyzeUrl({ url: url.trim(), text: text.trim() || undefined, profileId: profileId ?? undefined });
       onAnalyzed(res.item);
       setUrl("");
       setText("");

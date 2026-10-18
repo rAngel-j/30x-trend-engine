@@ -103,7 +103,8 @@ getTrendRepository(): TrendRepository   // elige Supabase o SQLite según el ent
 |---|---|---|
 | `networks` | `Network[]` | `network IN (…)` |
 | `stages` | `TrendStage[]` | `stage IN (…)` |
-| `formats` | `FormatType[]` | `format_type IN (…)` |
+| `formatHints` | `FormatHint[]` | `format_hint IN (…)`: formato detectado al ingerir, **existe en todas las piezas** |
+| `formats` | `FormatType[]` | `format_type IN (…)`: formato fino de la autopsia, **solo piezas analizadas** |
 | `languages` | `Language[]` | `language IN (…)` |
 | `statuses` | `AnalysisStatus[]` | `analysis_status IN (…)` |
 | `windowDays` | `number` | `published_at ≥ now − N días` (o `discovered_at` si no hay fecha) |
@@ -263,7 +264,46 @@ Parámetros con valores fuera del dominio (p. ej. `stages=viral`) → `400 INVAL
 ```
 Solo booleanos: nunca devuelve valores de claves.
 
-### `GET | PUT /api/brand-dna` — ADN de marca editable
+### Perfiles de marca — `/api/profiles`
+
+```jsonc
+// GET /api/profiles → 200
+{ "items": BrandProfile[], "default_id": "uuid" }
+// POST /api/profiles   { name, audience, topic_scope, personal_label, brand_label, dna, seeds[] } → 201 { "item": BrandProfile }
+// PUT  /api/profiles/:id  (mismos campos, parciales) → 200 { "item": BrandProfile }
+// DELETE /api/profiles/:id → 204   (409 si es el perfil por defecto)
+```
+
+`BrandProfile`: `{ id, slug, name, audience, topic_scope, personal_label, brand_label, dna (200-40 000), seeds (2-16 semillas), is_default, created_at, updated_at }`. Escribir requiere mismo origen o `Authorization: Bearer $INGEST_WEBHOOK_SECRET`.
+
+**`profileId` en el resto de endpoints** (opcional; si falta, se usa el perfil por defecto):
+- `POST /api/discover`, `POST /api/radar`, `POST /api/analyze-url`: campo `profileId` en el body.
+- `GET /api/discover`, `GET /api/radar`: parámetro `?profile=<uuid>`.
+
+### Acceso a la demo — `/api/access`
+
+Solo activo si `DEMO_ACCESS_CODE` está definido.
+
+```jsonc
+// POST /api/access   { "code": "…" }
+// 204 + cookie httpOnly "30x_access" (7 días) · 401 UNAUTHORIZED si el código no coincide
+// DELETE /api/access → 204 (cierra la sesión)
+```
+Sin la cookie, las páginas redirigen a `/acceso` y las API responden `401`.
+
+### Vistas guardadas — `/api/views`
+
+```jsonc
+// GET /api/views?profile=<uuid> → 200 { "items": [{ "id", "name", "filters": TrendFilters, "created_at" }] }
+// POST /api/views  { profileId, name (2-60), filters: TrendFilters } → 201 { "item": SavedView }
+// DELETE /api/views/:id → 204
+```
+
+### `GET | PUT /api/brand-dna` — **retirado**
+
+Reemplazado por `/api/profiles`: el ADN vive ahora en el campo `dna` de cada perfil. `docs/30X_BRAND_DNA.md` sigue siendo la fuente del perfil 30X por defecto.
+
+### (histórico) `GET | PUT /api/brand-dna` — ADN de marca editable
 
 ```jsonc
 // GET → 200

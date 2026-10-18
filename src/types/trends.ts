@@ -157,13 +157,15 @@ export interface JevResult {
 }
 
 export interface BrandAdaptations {
-  andres_bilbao_reel: {
+  /** Guion de Reel en la voz personal del perfil (p. ej. @andresbilbao). */
+  personal_reel: {
     hook: string;
     beats: { second: number; line: string; on_screen_text: string }[];
     cta: string;
     duration_seconds: number;
   };
-  x30_carousel: {
+  /** Carrusel en la voz de marca del perfil (p. ej. @30x). */
+  brand_carousel: {
     title: string;
     slides: { headline: string; body: string }[];
     caption: string;
@@ -179,6 +181,8 @@ export interface TrendAnalysis {
   adaptations: BrandAdaptations | null;
   /** Motivo si los guiones fallaron aunque el JEV superaba el umbral (la autopsia se conserva). */
   scripts_error?: string | null;
+  /** Copia de las etiquetas del perfil con el que se analizó (para mostrar y exportar). */
+  profile?: AnalysisProfileRef;
   model: string;
   analyzed_at: string;
 }
@@ -196,6 +200,8 @@ export interface TrendSignal extends StagedSignal {
   analysis_status: AnalysisStatus;
   analysis_error: string | null;
   analysis: TrendAnalysis | null;
+  /** Perfil de marca con el que se hizo el análisis (un JEV no vale para otro perfil). */
+  analysis_profile_id: string | null;
 }
 
 export const SORT_KEYS = ["priority", "jev", "outlier", "recent", "velocity"] as const;
@@ -204,6 +210,9 @@ export type SortKey = (typeof SORT_KEYS)[number];
 export interface TrendFilters {
   networks?: Network[];
   stages?: TrendStage[];
+  /** Formato detectado al ingerir (existe en TODAS las piezas). */
+  formatHints?: FormatHint[];
+  /** Formato fino de la autopsia de IA (solo piezas analizadas). */
   formats?: FormatType[];
   languages?: Language[];
   statuses?: AnalysisStatus[];
@@ -212,6 +221,8 @@ export interface TrendFilters {
   minJev?: number;
   maxJev?: number;
   minOutlier?: number;
+  /** Perfil activo: los filtros que dependen de la IA solo consideran sus análisis. */
+  profileId?: string;
   /** Texto libre sobre título, extracto y consulta. */
   search?: string;
   sort?: SortKey;
@@ -229,6 +240,7 @@ export interface TrendPage {
 export interface RadarRun {
   id: string;
   created_at: string;
+  profile_id: string | null;
   networks: Network[];
   seeds: string[];
   signals_found: number;
@@ -264,4 +276,43 @@ export interface RadarTopic {
 export interface RadarResult {
   run: RadarRun;
   topics: RadarTopic[];
+}
+
+// ── Perfiles de marca y vistas guardadas (docs/ARCHITECTURE.md §7b-quinquies) ──
+
+export interface BrandProfile {
+  id: string;
+  slug: string;
+  name: string;
+  /** A quién le habla la marca (evalúa la Matriz JEV). */
+  audience: string;
+  /** Qué temas interesan (el agrupador deja fuera el resto). */
+  topic_scope: string;
+  /** Voz personal: fundador o creador (guion de Reel). */
+  personal_label: string;
+  /** Voz de marca (carrusel). */
+  brand_label: string;
+  /** Reglas de estilo, Matriz JEV y prohibiciones (Markdown). */
+  dna: string;
+  seeds: string[];
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BrandProfileInput = Pick<BrandProfile, "name" | "audience" | "topic_scope" | "personal_label" | "brand_label" | "dna" | "seeds">;
+
+export interface AnalysisProfileRef {
+  id: string;
+  name: string;
+  personal_label: string;
+  brand_label: string;
+}
+
+export interface SavedView {
+  id: string;
+  profile_id: string;
+  name: string;
+  filters: TrendFilters;
+  created_at: string;
 }

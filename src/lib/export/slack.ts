@@ -1,11 +1,12 @@
 /** Slack Incoming Webhook con Block Kit. */
 import { SourceError } from "@/lib/errors";
 import type { TrendSignal } from "@/types/trends";
-import { fiveVariables, headline, truncate } from "./format";
+import { fiveVariables, headline, truncate, voiceLabels } from "./format";
 
 export function buildSlackPayload(signal: TrendSignal) {
   const vars = fiveVariables(signal);
   const ad = signal.analysis?.adaptations;
+  const voices = voiceLabels(signal);
   const blocks: Record<string, unknown>[] = [
     { type: "header", text: { type: "plain_text", text: truncate(`📡 ${signal.title}`, 150), emoji: true } },
     { type: "context", elements: [{ type: "mrkdwn", text: headline(signal) }] },
@@ -26,8 +27,8 @@ export function buildSlackPayload(signal: TrendSignal) {
       {
         type: "section",
         fields: [
-          { type: "mrkdwn", text: truncate(`*🎬 Reel @andresbilbao*\n${ad.andres_bilbao_reel.hook}`, 2000) },
-          { type: "mrkdwn", text: truncate(`*🗂️ Carrusel @30x*\n${ad.x30_carousel.title} (${ad.x30_carousel.slides.length} slides)`, 2000) },
+          { type: "mrkdwn", text: truncate(`*🎬 Reel ${voices.personal}*\n${ad.personal_reel.hook}`, 2000) },
+          { type: "mrkdwn", text: truncate(`*🗂️ Carrusel ${voices.brand}*\n${ad.brand_carousel.title} (${ad.brand_carousel.slides.length} slides)`, 2000) },
         ],
       },
     );
@@ -42,7 +43,7 @@ export function buildSlackPayload(signal: TrendSignal) {
     elements: [{ type: "button", text: { type: "plain_text", text: "Ver pieza original" }, url: signal.url }],
   });
 
-  return { text: `Tendencia 30X: ${signal.title} (${headline(signal)})`, blocks };
+  return { text: `Tendencia${voices.profile ? ` ${voices.profile}` : ""}: ${signal.title} (${headline(signal)})`, blocks };
 }
 
 export async function sendToSlack(signal: TrendSignal, webhookUrl: string): Promise<void> {

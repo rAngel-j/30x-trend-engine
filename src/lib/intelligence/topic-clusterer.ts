@@ -5,7 +5,7 @@
 import { Type, type Schema } from "@google/genai";
 import { z } from "zod";
 import { generateStructured, GROUNDING_RULES } from "./gemini-client";
-import type { TrendSignal } from "@/types/trends";
+import type { BrandProfile, TrendSignal } from "@/types/trends";
 
 const MAX_PIECES = 160;
 
@@ -25,7 +25,7 @@ const SCHEMA: Schema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          label: { type: Type.STRING, description: "Nombre del tema en español, concreto, de 3 a 7 palabras. Nunca solo 'IA'." },
+          label: { type: Type.STRING, description: "Nombre del tema en español, concreto, de 3 a 7 palabras. Nunca una categoría genérica." },
           thesis: { type: Type.STRING, description: "La tesis o el dolor que comparten las piezas, en una frase." },
           members: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: "Números de las piezas que pertenecen al tema." },
         },
@@ -47,16 +47,16 @@ function pieceLine(i: number, s: TrendSignal): string {
   return `[${i}] (${s.network}, ${s.language ?? "?"}, ${date}) ${s.title.slice(0, 140)} — ${excerpt}`;
 }
 
-export async function clusterTopics(signals: TrendSignal[]): Promise<TopicCluster[]> {
+export async function clusterTopics(signals: TrendSignal[], profile: Pick<BrandProfile, "name" | "audience" | "topic_scope">): Promise<TopicCluster[]> {
   const pieces = signals.slice(0, MAX_PIECES);
   if (pieces.length < 2) return [];
 
   const { topics } = await generateStructured({
     task: "topic-clusterer",
-    system: `Eres el editor de tendencias de 30X (IA para líderes y equipos de Latinoamérica).
+    system: `Eres el editor de tendencias de ${profile.name}, que le habla a: ${profile.audience}.
 Agrupas piezas de redes en TEMAS concretos: dos piezas comparten tema si defienden la misma tesis o atacan el mismo dolor, aunque estén en idiomas distintos.
-- Un tema es específico ("Agentes de IA que prospectan en ventas B2B"), nunca genérico ("Inteligencia artificial").
-- Cada pieza va como máximo en un tema. Deja fuera las piezas que no tratan sobre IA aplicada a negocios o equipos.
+- Un tema es específico (p. ej. "Agentes de IA que prospectan en ventas B2B"), nunca una categoría genérica.
+- Cada pieza va como máximo en un tema. Deja fuera las piezas que no tratan sobre: ${profile.topic_scope}.
 - Un tema necesita al menos 2 piezas.
 ${GROUNDING_RULES}`,
     prompt: `Agrupa estas ${pieces.length} piezas en temas:\n\n${pieces.map((s, i) => pieceLine(i, s)).join("\n")}`,

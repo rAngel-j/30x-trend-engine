@@ -47,3 +47,9 @@ export function fiveVariables(signal: TrendSignal): [string, string][] | null {
     ["Autor", `${f.author_vs_content.verdict.replace("_", " ")}: ${f.author_vs_content.explanation}`],
   ];
 }
+
+/** Etiquetas de las dos voces del perfil con el que se analizó la pieza. */
+export function voiceLabels(signal: TrendSignal): { personal: string; brand: string; profile: string } {
+  const p = signal.analysis?.profile;
+  return { personal: p?.personal_label ?? "voz personal", brand: p?.brand_label ?? "voz de marca", profile: p?.name ?? "" };
+}

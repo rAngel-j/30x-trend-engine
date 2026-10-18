@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
-/* Paleta oficial 30X + derivados funcionales (docs/ARCHITECTURE.md §7) */
+/*
+ * Paleta oficial 30X + derivados funcionales (docs/ARCHITECTURE.md §7).
+ * Los nombres describen el papel en el tema claro; el tema oscuro los redefine:
+ *   crema = fondo · beige = superficie · carbon = texto principal · tinta = texto secundario
+ *   arena = líneas · dorado = acento · brote / ceniza / alerta = estados
+ */
 @theme {
   --color-crema: #f7f4ef;
   --color-beige: #efece6;
@@ -14,6 +19,26 @@
   --color-alerta: #a3402b;
 
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Tema oscuro: carbón cálido de fondo, crema como texto, el dorado de 30X se mantiene. */
+@layer base {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-crema: #141416;
+    --color-beige: #1d1d21;
+    --color-carbon: #f2eee7;
+    --color-arena: #34343b;
+    --color-tinta: #aaa49a;
+    --color-ceniza: #7d7870;
+    --color-dorado: #e5a93c;
+    --color-dorado-hondo: #f0bd5f;
+    --color-brote: #93bd83;
+    --color-alerta: #ec8a72;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
 }
 
 html {
@@ -43,7 +68,7 @@ body {
 }
 
 dialog::backdrop {
-  background: rgb(24 24 27 / 0.45);
+  background: rgb(0 0 0 / 0.55);
 }
 
 @media (prefers-reduced-motion: reduce) {

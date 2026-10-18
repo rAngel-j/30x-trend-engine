@@ -10,6 +10,7 @@ import { getTrendRepository } from "@/lib/db/supabase";
 import { optionalEnv } from "@/lib/env";
 import { NotFoundError } from "@/lib/errors";
 import { enforceRetention } from "@/lib/pipeline";
+import { resolveProfile } from "@/lib/profiles";
 import { runRadar } from "@/lib/radar";
 
 export const runtime = "nodejs";
@@ -20,6 +21,7 @@ export const maxDuration = 300;
 const RadarBody = z.object({
   networks: z.array(z.enum(["youtube", "linkedin", "instagram", "tiktok"])).min(1).default(["linkedin", "youtube", "instagram", "tiktok"]),
   maxTopics: z.number().int().min(3).max(15).default(10),
+  profileId: z.string().trim().min(1).max(64).optional(),
 });
 
 export async function POST(req: Request) {
@@ -34,7 +36,8 @@ export async function POST(req: Request) {
 
     const repo = getTrendRepository();
     await enforceRetention(repo);
-    const result = await runRadar(repo, { networks: body.networks, maxTopics: body.maxTopics });
+    const profile = await resolveProfile(repo, body.profileId);
+    const result = await runRadar(repo, { networks: body.networks, maxTopics: body.maxTopics, profile });
     return NextResponse.json(result);
   } catch (err) {
     return errorResponse(err);
@@ -43,8 +46,11 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const runId = new URL(req.url).searchParams.get("run") ?? undefined;
-    const result = await getTrendRepository().getRadar(runId);
+    const params = new URL(req.url).searchParams;
+    const runId = params.get("run") ?? undefined;
+    const repo = getTrendRepository();
+    const profile = await resolveProfile(repo, params.get("profile"));
+    const result = await repo.getRadar(runId, profile.id);
     if (!result) throw new NotFoundError(runId ? `No existe el radar ${runId}.` : "Todavía no se ha ejecutado ningún radar.");
     return NextResponse.json(result);
   } catch (err) {

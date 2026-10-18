@@ -3,11 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // node:sqlite (fallback local) y los SDKs de servidor no deben empaquetarse para el cliente.
   serverExternalPackages: ["@google/genai"],
-  // El ADN de marca se lee en runtime (configuración viva): debe viajar con las rutas de IA.
+  // El perfil 30X por defecto se crea a partir de este documento la primera vez que una ruta lo necesita.
   outputFileTracingIncludes: {
-    "/api/discover": ["./docs/30X_BRAND_DNA.md"],
-    "/api/analyze-url": ["./docs/30X_BRAND_DNA.md"],
-    "/api/brand-dna": ["./docs/30X_BRAND_DNA.md"],
+    "/api/**/*": ["./docs/30X_BRAND_DNA.md"],
   },
 };
 

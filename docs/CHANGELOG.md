@@ -2,6 +2,31 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.5.0] — 2026-10-18 · Perfiles de marca, modo oscuro y preparación de la demo
+
+### Añadido
+- **Perfiles de marca** (`/api/profiles`, `ProfileManager`, migración `004_profiles.sql`): audiencia, temas de interés, voz personal, voz de marca, ADN y semillas por perfil. El perfil 30X se crea solo desde `docs/30X_BRAND_DNA.md` y adopta los análisis y radares anteriores. Cada análisis pertenece a su perfil: los filtros de IA (JEV, formato detallado, estado, orden por JEV) solo consideran los del perfil activo.
+- **Vistas guardadas** (`/api/views`, `SavedViews`): combinaciones de filtros con nombre, por perfil y compartidas por el equipo.
+- **Modo oscuro** con la paleta 30X, aplicado antes de pintar (sin destello claro) y recordado en el navegador.
+- Ayuda contextual ("?") para JEV, Outlier, etapa y crecimiento; franja "Cómo funciona" en tres pasos; aviso de configuración solo cuando falta una clave.
+- **Código de acceso para demos públicas** (`DEMO_ACCESS_CODE`, `src/proxy.ts`, `/acceso`, `/api/access`): cookie httpOnly con hash, comparación de tiempo constante, espera ante código incorrecto; los webhooks siguen entrando con su secreto.
+- `npm run demo:prepare`: deja el radar de LinkedIn precargado. Guion de demo de 5 minutos y preguntas del jurado en `docs/DEMO.md`.
+- Ícono propio de la app.
+
+### Cambiado
+- **Filtro de formato**: ahora usa el formato detectado al ingerir, que existe en todas las piezas (antes usaba el de la IA, presente solo en ~5 % de las piezas). El formato fino de la IA queda como filtro secundario, señalado como tal.
+- Guiones genéricos `personal_reel` / `brand_carousel` con las voces del perfil; los análisis antiguos se leen con compatibilidad. Prompts de IA, agrupador de temas, exportaciones e interfaz sin "30X" fijo.
+- Cabeceras de tarjetas como filas accesibles por teclado (`ToggleRow`), para poder contener botones de ayuda sin anidar botones.
+- `/api/brand-dna` retirado: el ADN vive en cada perfil.
+- README reorganizado alrededor de los 5 criterios de evaluación.
+
+### Verificado
+- `tsc`, `npm run smoke` (incluye creación del perfil 30X, adopción de análisis anteriores, aislamiento de JEV entre perfiles, vistas y guiones antiguos) y `next build`.
+- Migraciones 001-004 en PostgreSQL 17 (PGlite): un solo perfil por defecto, CHECK del ADN, cascadas al borrar un perfil, índice perfil + JEV en uso.
+- Navegador sobre una copia de los datos reales: claro y oscuro, tema expandido, ayuda contextual, creación de un perfil "Fintech Andina" desde la interfaz, radar vacío por perfil, vista guardada y filtros en la URL.
+- Código de acceso: redirección a `/acceso`, 401 en la API, código incorrecto con espera, cookie httpOnly, webhook con su secreto.
+- `npm run demo:prepare` real: radar de LinkedIn con 7 temas de 89 piezas en 143 s, 6 con guiones.
+
 ## [1.4.2] — 2026-10-18 · Radar de LinkedIn listo para la demo
 
 ### Corregido

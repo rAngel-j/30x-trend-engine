@@ -12,9 +12,10 @@ import { getTrendRepository, type TrendRepository } from "@/lib/db/supabase";
 import { errorMessage, NotFoundError } from "@/lib/errors";
 import { classifyCohort } from "@/lib/intelligence/trend-stage";
 import { aiEnabled, analyzeStoredSignal, enforceRetention } from "@/lib/pipeline";
+import { resolveProfile } from "@/lib/profiles";
 import { readPublicUrl } from "@/lib/sources";
 import { MAX_COMMUNITY_TEXT } from "@/lib/sources/public-reader";
-import type { StagedSignal, TrendSignal } from "@/types/trends";
+import type { BrandProfile, StagedSignal, TrendSignal } from "@/types/trends";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,17 +28,19 @@ const AnalyzeBody = z
     /** Texto que la persona vio públicamente (vía legal para redes cerradas). */
     text: z.string().trim().max(MAX_COMMUNITY_TEXT).optional(),
     force: z.boolean().default(false),
+    /** Perfil de marca con el que se analiza (por defecto, el principal). */
+    profileId: z.string().trim().min(1).max(64).optional(),
   })
   .refine((b) => Boolean(b.url) !== Boolean(b.id), { message: "Envía `url` o `id` (uno de los dos)." });
 
 const NO_AI = "Falta GEMINI_API_KEY: la señal se guardó como pending, sin autopsia ni guiones.";
 
-async function analyzeIfPossible(repo: TrendRepository, signal: TrendSignal, content: string | undefined, warnings: string[]) {
+async function analyzeIfPossible(repo: TrendRepository, signal: TrendSignal, profile: BrandProfile, content: string | undefined, warnings: string[]) {
   if (!aiEnabled()) {
     warnings.push(NO_AI);
-    return signal;
+    return (await repo.getSignal(signal.id, profile.id)) ?? signal;
   }
-  return analyzeStoredSignal(repo, signal, content);
+  return analyzeStoredSignal(repo, signal, profile, content);
 }
 
 export async function POST(req: Request) {
@@ -46,10 +49,11 @@ export async function POST(req: Request) {
     const body = await parseJsonBody(req, AnalyzeBody);
     const repo = getTrendRepository();
     await enforceRetention(repo);
+    const profile = await resolveProfile(repo, body.profileId);
 
     // ── Re-análisis de una señal guardada ──
     if (body.id) {
-      const stored = await repo.getSignal(body.id);
+      const stored = await repo.getSignal(body.id, profile.id);
       if (!stored) throw new NotFoundError(`No existe la señal ${body.id}.`);
       if (stored.analysis_status === "analyzed" && !body.force) {
         return NextResponse.json({ item: stored, providers: [], warnings: [], cached: true });
@@ -65,13 +69,13 @@ export async function POST(req: Request) {
       } catch (err) {
         warnings.push(`Se analiza con el extracto indexado: ${errorMessage(err)}`);
       }
-      const item = await analyzeIfPossible(repo, stored, content, warnings);
+      const item = await analyzeIfPossible(repo, stored, profile, content, warnings);
       return NextResponse.json({ item, providers, warnings, cached: false });
     }
 
     // ── URL nueva desde la comunidad ──
     const reading = await readPublicUrl(body.url!, { text: body.text });
-    const existing = await repo.getSignalByUrl(reading.signal.url);
+    const existing = await repo.getSignalByUrl(reading.signal.url, profile.id);
 
     if (existing?.analysis_status === "analyzed" && !body.force) {
       return NextResponse.json({ item: existing, providers: reading.providers, warnings: reading.warnings, cached: true });
@@ -88,7 +92,7 @@ export async function POST(req: Request) {
 
     const [stored] = await repo.upsertSignals([staged]);
     const warnings = [...reading.warnings];
-    const item = await analyzeIfPossible(repo, stored!, reading.content, warnings);
+    const item = await analyzeIfPossible(repo, stored!, profile, reading.content, warnings);
     return NextResponse.json({ item, providers: reading.providers, warnings, cached: false });
   } catch (err) {
     return errorResponse(err);

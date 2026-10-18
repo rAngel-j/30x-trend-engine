@@ -10,10 +10,10 @@ import { z } from "zod";
 import { GEMINI_MODEL, JEV_ADAPT_THRESHOLD } from "@/lib/env";
 import { errorMessage } from "@/lib/errors";
 import { ADAPTATION_SCHEMA, AdaptationValidator } from "./bilbao-adapter";
-import { FORENSIC_SCHEMA, FORENSIC_SYSTEM, ForensicValidator, verdictFromWeight } from "./forensic-5d";
-import { describeSignal, generateStructured, GROUNDING_RULES, loadBrandDna } from "./gemini-client";
+import { FORENSIC_SCHEMA, forensicSystem, ForensicValidator, verdictFromWeight } from "./forensic-5d";
+import { describeSignal, generateStructured, GROUNDING_RULES } from "./gemini-client";
 import { JEV_SCHEMA, JevValidator, weightJev } from "./jev-scorer";
-import type { BrandAdaptations, ForensicAutopsy, JevResult, StagedSignal, TrendAnalysis, TrendStage } from "@/types/trends";
+import type { AnalysisProfileRef, BrandAdaptations, BrandProfile, ForensicAutopsy, JevResult, StagedSignal, TrendAnalysis, TrendStage } from "@/types/trends";
 
 /** Más piezas por lote empeoran la calidad y pueden cortar la respuesta. */
 export const MAX_BATCH = 12;
@@ -58,14 +58,16 @@ function block(i: number, item: BatchItem): string {
   return `══ PIEZA [${i}] ══\n${describeSignal(item.signal, content)}`;
 }
 
-export async function analyzeBatch(items: BatchItem[]): Promise<BatchOutcome[]> {
+export const profileRef = (p: BrandProfile): AnalysisProfileRef => ({ id: p.id, name: p.name, personal_label: p.personal_label, brand_label: p.brand_label });
+
+export async function analyzeBatch(items: BatchItem[], profile: BrandProfile): Promise<BatchOutcome[]> {
   if (items.length === 0) return [];
   if (items.length > MAX_BATCH) {
-    const head = await analyzeBatch(items.slice(0, MAX_BATCH));
-    return [...head, ...(await analyzeBatch(items.slice(MAX_BATCH)))];
+    const head = await analyzeBatch(items.slice(0, MAX_BATCH), profile);
+    return [...head, ...(await analyzeBatch(items.slice(MAX_BATCH), profile))];
   }
 
-  const dna = await loadBrandDna();
+  const dna = profile.dna;
   const outcomes: BatchOutcome[] = items.map(() => ({ ok: false, error: "El modelo no devolvió análisis para esta pieza." }));
 
   // ── 1) Autopsia 5D + JEV de todas las piezas ──
@@ -73,9 +75,9 @@ export async function analyzeBatch(items: BatchItem[]): Promise<BatchOutcome[]> 
   try {
     const res = await generateStructured({
       task: "batch-autopsy",
-      system: `${FORENSIC_SYSTEM}
+      system: `${forensicSystem(profile)}
 
-Además eres el editor jefe de 30X: puntúas cada pieza con la Matriz JEV del ADN de marca. Sé exigente: un 90+ significa que un ejecutivo LatAm puede actuar sobre esto esta semana con su equipo actual.
+Además eres el editor jefe de ${profile.name}: puntúas cada pieza con la Matriz JEV para su audiencia (${profile.audience}). Sé exigente: un 90+ significa que esa audiencia puede actuar sobre esto esta semana con sus recursos actuales.
 Analiza CADA pieza por separado y devuelve un elemento por pieza con su número exacto.
 ${GROUNDING_RULES}
 
@@ -107,14 +109,16 @@ ${dna}`,
     try {
       const res = await generateStructured({
         task: "batch-scripts",
-        system: `Eres el guionista principal de 30X. Adaptas la MECÁNICA de piezas que funcionaron (gancho, formato, tesis) al ADN de @andresbilbao y @30x.
-Nunca copias el texto original: reescribes desde cero para ejecutivos y equipos de Latinoamérica. Un elemento por pieza, con su número exacto.
+        system: `Eres el guionista principal de ${profile.name}. Adaptas la MECÁNICA de piezas que funcionaron (gancho, formato, tesis) a dos voces:
+- personal_reel: la voz personal ${profile.personal_label} (Reel).
+- brand_carousel: la voz de marca ${profile.brand_label} (carrusel).
+Nunca copias el texto original: reescribes desde cero para ${profile.audience}. Un elemento por pieza, con su número exacto.
 Si la ETAPA QUE MANDA de una pieza es "saturated", su contrarian_angle es OBLIGATORIO.
 ${GROUNDING_RULES}
 
 ADN DE MARCA (cumplimiento obligatorio):
 ${dna}`,
-        prompt: `Genera el Reel para @andresbilbao, el carrusel para @30x, el ángulo contrarian y la ventana de publicación de cada pieza.\n\n${eligible
+        prompt: `Genera el Reel para ${profile.personal_label}, el carrusel para ${profile.brand_label}, el ángulo contrarian y la ventana de publicación de cada pieza.\n\n${eligible
           .map((i) => `${block(i, items[i]!)}\nETAPA QUE MANDA: ${stageOf(items[i]!)}\nAUTOPSIA YA REALIZADA:\n${JSON.stringify({ forensic: autopsies[i]!.forensic, jev: autopsies[i]!.jev.jev_latam_score })}`)
           .join("\n\n")}`,
         schema: SCRIPTS_SCHEMA,
@@ -141,7 +145,7 @@ ${dna}`,
     const scriptsMissing = eligible.includes(i) && !scripts.has(i) && scriptsError ? scriptsError : null;
     outcomes[i] = {
       ok: true,
-      analysis: { forensic: a.forensic, jev: a.jev, adaptations: scripts.get(i) ?? null, scripts_error: scriptsMissing, model: GEMINI_MODEL(), analyzed_at: analyzedAt },
+      analysis: { forensic: a.forensic, jev: a.jev, adaptations: scripts.get(i) ?? null, scripts_error: scriptsMissing, profile: profileRef(profile), model: GEMINI_MODEL(), analyzed_at: analyzedAt },
     };
   });
   return outcomes;

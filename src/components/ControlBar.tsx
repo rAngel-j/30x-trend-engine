@@ -3,6 +3,7 @@
 import { RotateCcw, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import {
+  FORMAT_HINT_LABELS,
   FORMAT_LABELS,
   NETWORK_LABELS,
   SEARCHABLE_NETWORKS,
@@ -60,6 +61,7 @@ export default function ControlBar({ filters, onChange }: ControlBarProps) {
   const activeCount = [
     filters.networks?.length,
     filters.stages?.length,
+    filters.formatHints?.length,
     filters.formats?.length,
     filters.statuses?.length,
     filters.windowDays,
@@ -148,13 +150,25 @@ export default function ControlBar({ filters, onChange }: ControlBarProps) {
 
       <Group title="Formato">
         <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(FORMAT_HINT_LABELS) as (keyof typeof FORMAT_HINT_LABELS)[]).map((f) => (
+            <Chip key={f} active={!!filters.formatHints?.includes(f)} onClick={() => set({ formatHints: toggle(filters.formatHints, f) })}>
+              {FORMAT_HINT_LABELS[f]}
+            </Chip>
+          ))}
+        </div>
+      </Group>
+
+      <details className="border-t border-arena pt-4" open={Boolean(filters.formats?.length)}>
+        <summary className="cursor-pointer text-sm font-semibold">Formato detallado (según la IA)</summary>
+        <p className="mt-1 mb-2 text-xs text-tinta">Solo existe en piezas ya analizadas: filtra un subconjunto pequeño.</p>
+        <div className="flex flex-wrap gap-1.5">
           {FORMAT_TYPES.map((f) => (
             <Chip key={f} active={!!filters.formats?.includes(f)} onClick={() => set({ formats: toggle(filters.formats, f) })}>
               {FORMAT_LABELS[f]}
             </Chip>
           ))}
         </div>
-      </Group>
+      </details>
 
       <Group title="Estado">
         <div className="flex flex-wrap gap-2">

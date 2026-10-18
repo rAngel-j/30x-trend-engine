@@ -1,5 +1,5 @@
 /** Etiquetas en español para la interfaz. */
-import type { AnalysisStatus, FormatType, Network, SortKey, TrendStage } from "@/types/trends";
+import type { AnalysisStatus, FormatHint, FormatType, Network, SortKey, TrendStage } from "@/types/trends";
 
 export const NETWORK_LABELS: Record<Network, string> = {
   youtube: "YouTube",
@@ -13,7 +13,7 @@ export const SEARCHABLE_NETWORKS: Exclude<Network, "web">[] = ["youtube", "linke
 
 export const STAGE_INFO: Record<TrendStage, { emoji: string; label: string; hint: string }> = {
   emerging: { emoji: "🌱", label: "Emergente", hint: "Acelera en inglés y casi nadie lo cubre en español." },
-  peaking: { emoji: "🚀", label: "Despegando", hint: "Momento ideal para publicar en 30X." },
+  peaking: { emoji: "🚀", label: "Despegando", hint: "Momento ideal para publicar." },
   saturated: { emoji: "🔥", label: "Saturada", hint: "Ya todos lo copiaron: solo con un ángulo contrarian." },
 };
 
@@ -30,6 +30,15 @@ export const FORMAT_LABELS: Record<FormatType, string> = {
   otro: "Otro",
 };
 
+export const FORMAT_HINT_LABELS: Record<Exclude<FormatHint, "unknown">, string> = {
+  short_vertical: "Video corto vertical",
+  long_video: "Video largo",
+  reel: "Reel",
+  image_post: "Post con imagen o carrusel",
+  text_post: "Post de texto",
+  article: "Artículo",
+};
+
 export const STATUS_LABELS: Record<AnalysisStatus, string> = {
   analyzed: "Analizadas",
   pending: "Sin analizar",
@@ -37,7 +46,7 @@ export const STATUS_LABELS: Record<AnalysisStatus, string> = {
 };
 
 export const SORT_LABELS: Record<SortKey, string> = {
-  priority: "Prioridad 30X",
+  priority: "Prioridad",
   jev: "Score JEV",
   outlier: "Outlier",
   velocity: "Velocidad",

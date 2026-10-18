@@ -10,9 +10,11 @@ import { getTrendRepository } from "@/lib/db/supabase";
 import { optionalEnv } from "@/lib/env";
 import { expandQuery } from "@/lib/intelligence/query-expander";
 import { analyzeTopPending, enforceRetention } from "@/lib/pipeline";
+import { resolveProfile } from "@/lib/profiles";
 import { collectSignals } from "@/lib/sources";
 import {
   ANALYSIS_STATUSES,
+  FORMAT_HINTS,
   FORMAT_TYPES,
   LANGUAGES,
   NETWORKS,
@@ -33,6 +35,7 @@ const DiscoverBody = z.object({
   maxPerSource: z.number().int().min(1).max(50).default(20),
   bilingual: z.boolean().default(true),
   analyzeTop: z.number().int().min(0).max(10).default(5),
+  profileId: z.string().trim().min(1).max(64).optional(),
 });
 
 export async function POST(req: Request) {
@@ -70,8 +73,10 @@ export async function POST(req: Request) {
       startedAt: new Date(started).toISOString(),
     });
 
-    const { updated, summary } = await analyzeTopPending(repo, stored, body.analyzeTop);
-    const items = stored.map((s) => updated.get(s.id) ?? s).sort((a, b) => b.priority_score - a.priority_score);
+    const profile = await resolveProfile(repo, body.profileId);
+    const { summary } = await analyzeTopPending(repo, stored, body.analyzeTop, profile);
+    // Se releen con el perfil activo: un análisis de otro perfil aparece como "sin analizar".
+    const items = (await repo.getSignalsByIds(stored.map((s) => s.id), profile.id)).sort((a, b) => b.priority_score - a.priority_score);
 
     return NextResponse.json({
       items,
@@ -88,12 +93,13 @@ export async function POST(req: Request) {
   }
 }
 
-const LIST_KEYS = ["networks", "stages", "formats", "languages", "statuses"] as const;
+const LIST_KEYS = ["networks", "stages", "formatHints", "formats", "languages", "statuses"] as const;
 const num = z.coerce.number();
 
 const FilterQuery = z.object({
   networks: z.array(z.enum(NETWORKS)).optional(),
   stages: z.array(z.enum(TREND_STAGES)).optional(),
+  formatHints: z.array(z.enum(FORMAT_HINTS)).optional(),
   formats: z.array(z.enum(FORMAT_TYPES)).optional(),
   languages: z.array(z.enum(LANGUAGES)).optional(),
   statuses: z.array(z.enum(ANALYSIS_STATUSES)).optional(),
@@ -102,6 +108,7 @@ const FilterQuery = z.object({
   maxJev: num.min(0).max(100).optional(),
   minOutlier: num.min(0).optional(),
   search: z.string().trim().max(200).optional(),
+  profile: z.string().trim().min(1).max(64).optional(),
   sort: z.enum(SORT_KEYS).optional(),
   limit: num.int().min(1).max(100).optional(),
   offset: num.int().min(0).optional(),
@@ -110,8 +117,10 @@ const FilterQuery = z.object({
 export async function GET(req: Request) {
   try {
     const params = new URL(req.url).searchParams;
-    const filters: TrendFilters = parseWith(FilterQuery, searchParamsToObject(params, LIST_KEYS));
+    const { profile: profileParam, ...rest } = parseWith(FilterQuery, searchParamsToObject(params, LIST_KEYS));
     const repo = getTrendRepository();
+    const profile = await resolveProfile(repo, profileParam);
+    const filters: TrendFilters = { ...rest, profileId: profile.id };
     const page = await repo.querySignals(filters);
     return NextResponse.json({ ...page, repository: repo.kind });
   } catch (err) {

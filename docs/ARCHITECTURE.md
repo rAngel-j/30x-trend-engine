@@ -340,6 +340,59 @@ Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de 50 + 30·log2(9/3) �
 
 **Guiones que fallan:** si la solicitud de guiones falla (red o cuota), la autopsia y el JEV se guardan igual con `scripts_error`. La interfaz ofrece "Generar guiones de nuevo" y el siguiente radar los regenera solo.
 
+## 7b-quinquies. Perfiles de marca: hecho para 30X, útil para cualquiera
+
+El planteamiento del reto dice que *"es el mismo problema que tiene cualquier marca, medio o creador"*. Por eso todo lo que era específico de 30X vive en un **perfil de marca**, guardado en la base de datos (funciona igual en local y en la nube, donde los archivos son de solo lectura):
+
+| Campo | 30X (perfil por defecto) | Para qué se usa |
+|---|---|---|
+| `name` | 30X | Títulos y prompts |
+| `audience` | Ejecutivos, líderes y equipos de LatAm aprendiendo IA | Matriz JEV: "¿le sirve a **esta** audiencia?" |
+| `topic_scope` | IA aplicada a negocios y equipos | Agrupador de temas: qué piezas quedan fuera |
+| `personal_label` | @andresbilbao | Guion de Reel en voz personal (fundador, creador) |
+| `brand_label` | @30x | Carrusel en voz de marca |
+| `dna` | Contenido de `docs/30X_BRAND_DNA.md` | Reglas de voz, JEV, prohibiciones |
+| `seeds` | 8 semillas ES + EN | Búsquedas del Radar semanal |
+
+```mermaid
+flowchart LR
+    UI["Selector de perfil<br/>(cabecera)"] -->|profileId| API["discover · radar · analyze-url"]
+    API --> P[("brand_profiles")]
+    P --> AI["Prompts: audiencia, alcance, voces, ADN"]
+    P --> S["Semillas del radar"]
+    AI --> A["Análisis guardado con analysis_profile_id"]
+```
+
+- **Perfil por defecto:** al arrancar, si no hay perfiles, se crea "30X" a partir de `docs/30X_BRAND_DNA.md`, y los análisis y radares anteriores se asignan a ese perfil.
+- **Un análisis pertenece a un perfil.** El JEV de una pieza para 30X no vale para otra marca, así que cada análisis guarda `analysis_profile_id`. Si cambias de perfil, esa pieza aparece como "sin analizar" para el nuevo perfil hasta que la analices. Los filtros que dependen de la IA (JEV, formato detallado, estado, orden por JEV) consideran solo los análisis del perfil activo.
+- **Guiones genéricos:** `personal_reel` (voz personal) y `brand_carousel` (voz de marca). Los análisis antiguos (`andres_bilbao_reel`, `x30_carousel`) se leen con compatibilidad. Cada análisis guarda una copia de las etiquetas del perfil para mostrarlas y exportarlas.
+- **El JEV se generaliza sin perder el nombre:** los 3 criterios (impacto, aplicabilidad, claridad) se evalúan para la audiencia del perfil.
+- **Selección por navegador:** el perfil activo se guarda en el navegador y viaja en cada petición (`profileId`), así dos personas pueden usar perfiles distintos a la vez.
+
+## 7b-sexies. Vistas guardadas
+
+Combinaciones de filtros con nombre ("Emergentes de LinkedIn con JEV ≥ 70"), guardadas en la tabla `saved_views` por perfil. Son compartidas por el equipo y se aplican con un clic.
+
+## 7b-septies. Demo y acceso
+
+**Código de acceso (`DEMO_ACCESS_CODE`):** si la app se publica en una URL, cualquiera podría gastar la cuota diaria de Gemini, YouTube y Tavily. Con `DEMO_ACCESS_CODE` definido, `src/proxy.ts` (Proxy de Next 16, runtime Node) exige una cookie de acceso:
+
+```mermaid
+flowchart LR
+    R["Petición"] --> P{"¿DEMO_ACCESS_CODE?"}
+    P -- no --> A["App"]
+    P -- sí --> C{"Cookie válida o<br/>Bearer del webhook"}
+    C -- sí --> A
+    C -- "no (página)" --> L["/acceso → POST /api/access"]
+    C -- "no (API)" --> U["401 UNAUTHORIZED"]
+    L -->|cookie httpOnly 7 días| A
+```
+
+- La cookie guarda un hash SHA-256 del código, no el código. La comparación es de tiempo constante y un código incorrecto espera 600 ms (frena la fuerza bruta).
+- Los webhooks externos al Sensor siguen entrando con `Authorization: Bearer $INGEST_WEBHOOK_SECRET`.
+
+**Radar precargado (`npm run demo:prepare`):** corre el radar del perfil principal en LinkedIn (la pregunta del entregable) y opcionalmente en las 4 redes, directamente con la biblioteca, sin servidor. Usa 3 solicitudes de Gemini por radar. Así la demo abre con resultados al instante, sin depender de la cuota ni de la latencia en vivo.
+
 ## 7c. Diagnóstico de conexiones (`npm run doctor`)
 
 `scripts/doctor.ts` lee `.env.local` y prueba cada servicio con la llamada **más barata posible** contra la API real, sin escribir datos:

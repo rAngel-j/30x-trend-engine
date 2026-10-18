@@ -1,13 +1,10 @@
 "use client";
 
-import { Check, LoaderCircle, Plug, X } from "lucide-react";
+import { Check, Plug, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ApiError,
-  getBrandDna,
   getStatus,
   loadOverrides,
-  saveBrandDna,
   storeOverrides,
   type ExportOverrides,
   type ServerStatus,
@@ -54,9 +51,6 @@ export default function PlugAndPlayConfig({ onOverridesChange }: PlugAndPlayConf
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [overrides, setOverrides] = useState<ExportOverrides>({});
   const [savedOverrides, setSavedOverrides] = useState(false);
-  const [dna, setDna] = useState<{ content: string; editable: boolean; updated_at: string } | null>(null);
-  const [dnaDraft, setDnaDraft] = useState("");
-  const [dnaState, setDnaState] = useState<{ busy: boolean; message: string | null; error: boolean }>({ busy: false, message: null, error: false });
 
   useEffect(() => {
     const stored = loadOverrides();
@@ -65,18 +59,9 @@ export default function PlugAndPlayConfig({ onOverridesChange }: PlugAndPlayConf
     getStatus().then(setStatus).catch(() => setStatus(null));
   }, [onOverridesChange]);
 
-  const open = async () => {
+  const open = () => {
     dialog.current?.showModal();
     getStatus().then(setStatus).catch(() => setStatus(null));
-    if (!dna) {
-      try {
-        const res = await getBrandDna();
-        setDna(res);
-        setDnaDraft(res.content);
-      } catch (err) {
-        setDnaState({ busy: false, error: true, message: err instanceof ApiError ? err.message : "No se pudo leer el ADN." });
-      }
-    }
   };
 
   const disconnected = status
@@ -174,45 +159,8 @@ export default function PlugAndPlayConfig({ onOverridesChange }: PlugAndPlayConf
             </form>
           </Block>
 
-          <Block
-            title="ADN de marca"
-            intro={`Las reglas que siguen los guiones de @andresbilbao y @30x y la Matriz JEV. Los cambios aplican desde el siguiente análisis${status ? ` (umbral para generar guiones: JEV ${status.ai.jev_threshold})` : ""}.`}
-          >
-            <textarea
-              value={dnaDraft}
-              onChange={(e) => setDnaDraft(e.target.value)}
-              readOnly={dna ? !dna.editable : true}
-              rows={14}
-              spellCheck={false}
-              aria-label="ADN de marca en Markdown"
-              className="w-full rounded-lg border border-arena bg-beige p-3 font-mono text-xs leading-relaxed focus:border-carbon focus:outline-none"
-            />
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={!dna?.editable || dnaState.busy || dnaDraft === dna?.content}
-                onClick={async () => {
-                  setDnaState({ busy: true, message: null, error: false });
-                  try {
-                    const res = await saveBrandDna(dnaDraft);
-                    setDna((d) => (d ? { ...d, content: dnaDraft, updated_at: res.updated_at } : d));
-                    setDnaState({ busy: false, message: "ADN guardado", error: false });
-                  } catch (err) {
-                    setDnaState({ busy: false, error: true, message: err instanceof ApiError ? err.message : "No se pudo guardar el ADN." });
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-crema hover:bg-carbon/90 disabled:opacity-50"
-              >
-                {dnaState.busy && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
-                Guardar ADN
-              </button>
-              {dna && !dna.editable && <span className="text-sm text-tinta">Este servidor es de solo lectura: edita el archivo en el repositorio.</span>}
-              {dnaState.message && (
-                <span role="status" className={`text-sm ${dnaState.error ? "text-alerta" : "text-brote"}`}>
-                  {dnaState.message}
-                </span>
-              )}
-            </div>
+          <Block title="ADN de marca" intro="Ahora vive en cada perfil de marca: abre el botón de perfiles (junto a este) para editar audiencia, voces, ADN y semillas.">
+            {status && <p className="text-sm text-tinta">Umbral para generar guiones: JEV {status.ai.jev_threshold}. Modelo: {status.ai.model}.</p>}
           </Block>
         </div>
       </dialog>

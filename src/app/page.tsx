@@ -5,7 +5,10 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import CommunitySensor from "@/components/CommunitySensor";
 import ControlBar from "@/components/ControlBar";
 import PlugAndPlayConfig from "@/components/PlugAndPlayConfig";
+import ProfileManager from "@/components/ProfileManager";
 import RadarBoard from "@/components/RadarBoard";
+import SavedViews from "@/components/SavedViews";
+import ThemeToggle from "@/components/ThemeToggle";
 import TrendCard from "@/components/TrendCard";
 import {
   ApiError,
@@ -13,15 +16,18 @@ import {
   discover,
   exportTrend,
   filtersToQuery,
+  listProfiles,
   listTrends,
+  loadActiveProfileId,
   queryToFilters,
+  storeActiveProfileId,
   type DiscoverResponse,
   type ExportOverrides,
   type ExportResult,
   type ExportTarget,
 } from "@/lib/client/api";
 import { NETWORK_LABELS, SEARCHABLE_NETWORKS, WINDOW_OPTIONS } from "@/lib/client/labels";
-import type { Network, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
+import type { BrandProfile, Network, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
 
 const PAGE_SIZE = 10;
 
@@ -36,6 +42,9 @@ type Notice = { tone: "info" | "warn" | "error"; text: string; sources?: SourceR
 
 export default function RadarPage() {
   const [filters, setFilters] = useState<TrendFilters>({});
+  const [profiles, setProfiles] = useState<BrandProfile[]>([]);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const profile = profiles.find((p) => p.id === profileId) ?? null;
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState<TrendSignal[]>([]);
   const [total, setTotal] = useState(0);
@@ -56,6 +65,33 @@ export default function RadarPage() {
     overrides.current = o;
   }, []);
 
+  const reloadProfiles = useCallback(async (selectId?: string | null) => {
+    try {
+      const { items, default_id } = await listProfiles();
+      setProfiles(items);
+      setProfileId((current) => {
+        const wanted = selectId ?? current ?? loadActiveProfileId();
+        const next = wanted && items.some((p) => p.id === wanted) ? wanted : default_id;
+        storeActiveProfileId(next);
+        return next;
+      });
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : "No se pudieron cargar los perfiles.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void reloadProfiles();
+  }, [reloadProfiles]);
+
+  const switchProfile = (id: string) => {
+    storeActiveProfileId(id);
+    setProfileId(id);
+    setExpandedId(null);
+    setLastRun(null);
+    setNotice(null);
+  };
+
   // Filtros ⇄ URL: una vista filtrada se comparte copiando el enlace.
   useEffect(() => {
     setFilters(queryToFilters(new URLSearchParams(window.location.search)));
@@ -72,7 +108,8 @@ export default function RadarPage() {
     async (signal?: AbortSignal) => {
       setLoading(true);
       try {
-        const page = await listTrends({ ...filters, limit: filters.limit ?? PAGE_SIZE }, signal);
+        if (!profileId) return;
+        const page = await listTrends({ ...filters, limit: filters.limit ?? PAGE_SIZE }, profileId, signal);
         setItems(page.items);
         setTotal(page.total);
         setListError(null);
@@ -83,7 +120,7 @@ export default function RadarPage() {
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [filters],
+    [filters, profileId],
   );
 
   useEffect(() => {
@@ -103,7 +140,7 @@ export default function RadarPage() {
     setSearching(true);
     setNotice(null);
     try {
-      const res = await discover({ query: q, networks: searchNetworks, windowDays, analyzeTop: 5 });
+      const res = await discover({ query: q, networks: searchNetworks, windowDays, analyzeTop: 5, profileId: profileId ?? undefined });
       setLastRun(res);
       setExpandedId(null);
       setFilters({ search: q, sort: "priority" });
@@ -129,7 +166,7 @@ export default function RadarPage() {
 
   const handleAnalyze = async (signal: TrendSignal): Promise<TrendSignal | void> => {
     try {
-      const res = await analyzeUrl({ id: signal.id, force: true });
+      const res = await analyzeUrl({ id: signal.id, force: true, profileId: profileId ?? undefined });
       replaceItem(res.item);
       if (res.item.analysis_status !== "analyzed") {
         setNotice({ tone: "warn", text: res.item.analysis_error ?? res.warnings.at(-1) ?? "La pieza sigue sin analizar." });
@@ -158,15 +195,35 @@ export default function RadarPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
-      <header className="flex items-center justify-between py-5">
+      <header className="flex flex-wrap items-center justify-between gap-3 py-5">
         <p className="flex items-baseline gap-2">
           <span className="wide text-2xl font-black">30X</span>
           <span className="text-tinta">Radar de tendencias</span>
         </p>
-        <PlugAndPlayConfig onOverridesChange={onOverridesChange} />
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="profile-select" className="sr-only">
+            Perfil de marca activo
+          </label>
+          <select
+            id="profile-select"
+            value={profileId ?? ""}
+            onChange={(e) => switchProfile(e.target.value)}
+            disabled={profiles.length === 0}
+            className="h-9 max-w-[14rem] rounded-lg border border-arena bg-crema px-3 text-sm font-semibold focus:border-carbon focus:outline-none"
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                Perfil: {p.name}
+              </option>
+            ))}
+          </select>
+          <ProfileManager profiles={profiles} activeId={profileId} onChanged={(id) => void reloadProfiles(id)} />
+          <ThemeToggle />
+          <PlugAndPlayConfig onOverridesChange={onOverridesChange} />
+        </div>
       </header>
 
-      <RadarBoard onAnalyze={handleAnalyze} onExport={handleExport} />
+      <RadarBoard profile={profile} onAnalyze={handleAnalyze} onExport={handleExport} />
 
       <form onSubmit={runDiscovery} className="mt-16 border-t border-arena pt-10 pb-6">
         <p className="mb-3 text-sm text-tinta">¿Tienes un tema concreto en mente? Explóralo pieza por pieza.</p>
@@ -222,7 +279,7 @@ export default function RadarPage() {
           <button
             type="submit"
             disabled={searching || searchNetworks.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-dorado px-5 py-2.5 font-semibold text-carbon hover:bg-dorado/85 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-dorado px-5 py-2.5 font-semibold text-[#18181b] hover:bg-dorado/85 disabled:opacity-60"
           >
             {searching && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
             {searching ? "Buscando y analizando…" : "Buscar ahora"}
@@ -233,7 +290,7 @@ export default function RadarPage() {
         </p>
       </form>
 
-      <CommunitySensor onAnalyzed={handleSensorResult} />
+      <CommunitySensor profileId={profileId} onAnalyzed={handleSensorResult} />
 
       {(lastRun || notice) && (
         <div role="status" className="mt-4 space-y-2 text-sm">
@@ -269,6 +326,9 @@ export default function RadarPage() {
             <SlidersHorizontal className="size-4" aria-hidden /> {showFilters ? "Ocultar filtros" : "Filtrar"}
           </button>
           <div className={`${showFilters ? "block" : "hidden"} lg:sticky lg:top-6 lg:block`}>
+            <div className="mb-5">
+              <SavedViews profileId={profileId} filters={filters} onApply={(f) => setFilters(f)} />
+            </div>
             <ControlBar filters={filters} onChange={setFilters} />
           </div>
         </aside>

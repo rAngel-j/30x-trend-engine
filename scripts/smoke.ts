@@ -21,7 +21,10 @@ import { parseRetryDelay } from "@/lib/intelligence/gemini-client";
 import { weightJev } from "@/lib/intelligence/jev-scorer";
 import { computeTopicGrowth, representativeStrength, topicScore } from "@/lib/intelligence/topic-growth";
 import { scrubHandles, scrubIndexedTitle, scrubText } from "@/lib/privacy";
-import { loadRadarSeeds, runRadar } from "@/lib/radar";
+import { runRadar } from "@/lib/radar";
+import { ensureDefaultProfile, parseSeedsFromDna } from "@/lib/profiles";
+import { normalizeAdaptations } from "@/lib/intelligence/bilbao-adapter";
+import { readFileSync } from "node:fs";
 import { classifyCohort, computePriority, detectLanguage } from "@/lib/intelligence/trend-stage";
 import { collectSignals, readPublicUrl } from "@/lib/sources";
 import { extractEngagement, parseCompactNumber } from "@/lib/sources/social-serp";
@@ -69,6 +72,16 @@ async function main() {
   assert.equal(weightJev({ business_impact: 90, practical_applicability: 80, executive_clarity: 70 }), 82);
   ok("ponderación JEV 0.40/0.35/0.25");
 
+  const legacyScripts = normalizeAdaptations({
+    andres_bilbao_reel: { hook: "h", beats: [], cta: "c", duration_seconds: 30 },
+    x30_carousel: { title: "t", slides: [], caption: "c", cta: "c" },
+    contrarian_angle: null,
+    publish_window: "ya",
+  });
+  assert.equal(legacyScripts?.personal_reel.hook, "h");
+  assert.equal(legacyScripts?.brand_carousel.title, "t");
+  ok("guiones guardados con nombres antiguos se leen como voz personal / voz de marca");
+
   // Reintentos de Gemini: espera por minuto vs. cuota diaria agotada.
   assert.equal(parseRetryDelay("Please retry in 37.5s."), 37_500);
   assert.equal(parseRetryDelay("Please retry in 19h24m59.1s. (RESOURCE_EXHAUSTED)"), 69_899_100);
@@ -103,8 +116,8 @@ async function main() {
   assert.equal(scrubIndexedTitle("Instagram"), "");
   ok("privacidad: se quitan nombres de autor, menciones, correos, teléfonos y enlaces de títulos y textos");
 
-  const seeds = await loadRadarSeeds();
-  assert.ok(seeds.length >= 2 && seeds.some((x) => /AI/.test(x)) && seeds.some((x) => /IA/.test(x)));
+  const seeds = parseSeedsFromDna(readFileSync("docs/30X_BRAND_DNA.md", "utf8"));
+  assert.ok(seeds.length >= 2 && seeds.some((x: string) => /AI/.test(x)) && seeds.some((x: string) => /IA/.test(x)));
   ok(`semillas del radar desde el ADN: ${seeds.length} (español + inglés)`);
 
   // Cohortes sintéticas SOLO para verificar las reglas de etapa (no se persisten en la base real).
@@ -181,7 +194,7 @@ async function main() {
     // Radar: guardar y leer una corrida con su pieza representativa.
     const remaining = (await repo.querySignals({})).items;
     const saved = await repo.saveRadar(
-      { networks: ["youtube"], seeds: ["s1"], signals_found: remaining.length, sources: [], notes: [], took_ms: 1 },
+      { profile_id: null, networks: ["youtube"], seeds: ["s1"], signals_found: remaining.length, sources: [], notes: [], took_ms: 1 },
       [{
         rank: 1, label: "Tema de prueba", thesis: "Tesis", this_week: 3, last_week: 1, growth_index: 80, volume_index: 30, score: 70,
         stage: "emerging", stage_score: 70, stage_evidence: remaining[0]!.stage_evidence, jev_score: 91, networks: ["youtube"],
@@ -192,6 +205,38 @@ async function main() {
     assert.equal(latest?.run.id, saved.run.id);
     assert.equal(latest?.topics[0]?.representative?.id, remaining[0]!.id);
     ok("radar: corrida y temas guardados con su pieza representativa");
+
+    // Perfiles: el 30X por defecto se crea desde el ADN y adopta análisis y radares anteriores.
+    const def = await ensureDefaultProfile(repo);
+    assert.equal(def.name, "30X");
+    assert.equal(def.is_default, true);
+    assert.ok(def.seeds.length >= 2);
+    const adopted = (await repo.querySignals({ profileId: def.id, statuses: ["analyzed"] })).total;
+    assert.equal(adopted, 1, "el análisis anterior pasa a pertenecer al perfil 30X");
+    assert.equal((await repo.getRadar(undefined, def.id))?.run.id, saved.run.id);
+    ok(`perfiles: "${def.name}" creado desde el ADN (${def.seeds.length} semillas) y adopta análisis y radares anteriores`);
+
+    // Aislamiento: un análisis de 30X no vale para otra marca.
+    const other = await repo.createProfile({ ...def, name: "Fintech Andina", personal_label: "@fundadora", brand_label: "@fintech" });
+    assert.notEqual(other.slug, def.slug);
+    assert.equal((await repo.querySignals({ profileId: other.id, minJev: 1 })).total, 0);
+    assert.equal((await repo.querySignals({ profileId: other.id, statuses: ["analyzed"] })).total, 0);
+    assert.equal((await repo.querySignals({ profileId: other.id, statuses: ["pending"] })).total, 5);
+    const seenByOther = (await repo.querySignals({ profileId: other.id, sort: "recent" })).items.find((x) => x.id === stored[0]!.id);
+    assert.equal(seenByOther?.analysis, null);
+    assert.equal(seenByOther?.jev_score, null);
+    assert.equal((await repo.querySignals({ profileId: def.id, minJev: 80 })).total, 1);
+    ok("perfiles: el JEV y el análisis de 30X no se filtran ni se muestran en otro perfil");
+
+    // Vistas guardadas por perfil.
+    const view = await repo.createView(def.id, "Emergentes con JEV alto", { stages: ["emerging"], minJev: 70 });
+    assert.deepEqual((await repo.listViews(def.id)).map((v) => v.name), ["Emergentes con JEV alto"]);
+    assert.equal((await repo.listViews(other.id)).length, 0);
+    await repo.deleteView(view.id);
+    assert.equal((await repo.listViews(def.id)).length, 0);
+    await repo.deleteProfile(def.id);
+    assert.ok(await repo.getProfile(def.id), "el perfil por defecto no se puede borrar");
+    ok("vistas guardadas por perfil; el perfil por defecto no se puede borrar");
   } finally {
     await repo.close();
     rmSync(dir, { recursive: true, force: true });
@@ -264,22 +309,27 @@ async function main() {
 
   if (!optionalEnv("GEMINI_API_KEY")) {
     const tmpRepo = createSqliteRepository(join(tmpdir(), `30x-radar-${Date.now()}.db`));
-    await assert.rejects(runRadar(tmpRepo, { networks: ["youtube"], maxTopics: 10 }), /GEMINI_API_KEY/);
+    const tmpProfile = await ensureDefaultProfile(tmpRepo);
+    await assert.rejects(runRadar(tmpRepo, { networks: ["youtube"], maxTopics: 10, profile: tmpProfile }), /GEMINI_API_KEY/);
     await tmpRepo.close();
     ok("radar: sin GEMINI_API_KEY responde con error claro (agrupar temas requiere IA)");
   }
 
   console.log("\n5) Motor JEV en Gemini");
   if (!optionalEnv("GEMINI_API_KEY")) {
-    await assert.rejects(enrichSignal(classifyCohort(english)[0]!), /GEMINI_API_KEY/);
+    const fakeProfile = { id: "p", slug: "p", name: "Prueba", audience: "Audiencia de prueba", topic_scope: "IA", personal_label: "@a", brand_label: "@b", dna: "x".repeat(200), seeds: ["a", "b"], is_default: false, created_at: "", updated_at: "" };
+    await assert.rejects(enrichSignal(classifyCohort(english)[0]!, fakeProfile), /GEMINI_API_KEY/);
     console.log("  · GEMINI_API_KEY no configurada: el motor responde con error claro ✔");
   } else if (!LIVE) {
     console.log("  · omitido para no gastar cuota de Gemini (ejecuta con SMOKE_LIVE=1)");
   } else if (reading) {
     const [signal] = classifyCohort([reading.signal]);
-    const analysis = await enrichSignal(signal!, reading.content);
+    const liveRepo = createSqliteRepository(join(tmpdir(), `30x-live-${Date.now()}.db`));
+    const liveProfile = await ensureDefaultProfile(liveRepo);
+    await liveRepo.close();
+    const analysis = await enrichSignal(signal!, liveProfile, reading.content);
     console.log(`  ✔ JEV ${analysis.jev.jev_latam_score} · formato ${analysis.forensic.format_type.label} · gancho: "${analysis.forensic.hook_analysis.hook_text.slice(0, 60)}"`);
-    console.log(`    guiones: ${analysis.adaptations ? `Reel "${analysis.adaptations.andres_bilbao_reel.hook}" + carrusel de ${analysis.adaptations.x30_carousel.slides.length} slides` : "omitidos (JEV bajo el umbral)"}`);
+    console.log(`    guiones: ${analysis.adaptations ? `Reel "${analysis.adaptations.personal_reel.hook}" + carrusel de ${analysis.adaptations.brand_carousel.slides.length} slides` : "omitidos (JEV bajo el umbral)"}`);
   }
 
   console.log("\nSmoke test OK\n");

@@ -2,6 +2,8 @@
 
 import { Check, ChevronDown, Copy, ExternalLink, LoaderCircle, Send, Sparkles, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import InfoTip, { HELP } from "./InfoTip";
+import ToggleRow from "./ToggleRow";
 import type { ExportResult, ExportTarget } from "@/lib/client/api";
 import { compact, FORMAT_LABELS, NETWORK_LABELS, relativeDate, STAGE_INFO, VERDICT_LABELS } from "@/lib/client/labels";
 import { TREND_STAGES, type BrandAdaptations, type StageEvidence, type TrendSignal, type TrendStage } from "@/types/trends";
@@ -55,11 +57,14 @@ export function stageExplanation(e: StageEvidence): string {
   return `${parts.join(", ")}.`;
 }
 
-function Stat({ value, label, emphasis = false }: { value: string; label: string; emphasis?: boolean }) {
+function Stat({ value, label, emphasis = false, help }: { value: string; label: string; emphasis?: boolean; help?: ReactNode }) {
   return (
     <div className="min-w-16 text-right">
       <p className={`wide leading-none font-bold tabular-nums ${emphasis ? "text-3xl text-dorado-hondo" : "text-2xl"}`}>{value}</p>
-      <p className="mt-1 text-xs text-tinta">{label}</p>
+      <p className="mt-1 inline-flex items-center gap-1 text-xs text-tinta">
+        {label}
+        {help && <InfoTip label={label}>{help}</InfoTip>}
+      </p>
     </div>
   );
 }
@@ -95,26 +100,26 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function reelText(a: BrandAdaptations): string {
-  const r = a.andres_bilbao_reel;
+  const r = a.personal_reel;
   return [`GANCHO: ${r.hook}`, ...r.beats.map((b) => `[${b.second}s] ${b.line}\n   En pantalla: ${b.on_screen_text}`), `CTA: ${r.cta}`].join("\n");
 }
 
 function carouselText(a: BrandAdaptations): string {
-  const c = a.x30_carousel;
+  const c = a.brand_carousel;
   return [c.title, ...c.slides.map((s, i) => `${i + 1}. ${s.headline}\n   ${s.body}`), `CTA: ${c.cta}`, "", c.caption].join("\n");
 }
 
-function Scripts({ adaptations }: { adaptations: BrandAdaptations }) {
+function Scripts({ adaptations, personalLabel, brandLabel }: { adaptations: BrandAdaptations; personalLabel: string; brandLabel: string }) {
   const [tab, setTab] = useState<"reel" | "carousel">("reel");
-  const reel = adaptations.andres_bilbao_reel;
-  const carousel = adaptations.x30_carousel;
+  const reel = adaptations.personal_reel;
+  const carousel = adaptations.brand_carousel;
   return (
     <div>
       <div role="tablist" aria-label="Guiones" className="mb-4 inline-flex rounded-lg border border-arena p-0.5 text-sm">
         {(
           [
-            ["reel", `Reel para @andresbilbao (${reel.duration_seconds} s)`],
-            ["carousel", `Carrusel para @30x (${carousel.slides.length} slides)`],
+            ["reel", `Reel para ${personalLabel} (${reel.duration_seconds} s)`],
+            ["carousel", `Carrusel para ${brandLabel} (${carousel.slides.length} slides)`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -256,11 +261,10 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
 
   return (
     <li className={`rounded-xl border bg-beige transition-colors ${expanded ? "border-carbon" : "border-transparent hover:border-arena"}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        aria-controls={panelId}
+      <ToggleRow
+        onToggle={onToggle}
+        expanded={expanded}
+        controls={panelId}
         className="grid w-full grid-cols-[2.5rem_1fr] items-start gap-x-4 gap-y-3 p-4 text-left sm:grid-cols-[3rem_1fr_auto] sm:items-center"
       >
         <span className="wide pt-0.5 text-3xl leading-none font-bold text-arena tabular-nums sm:text-4xl">{rank}</span>
@@ -276,17 +280,17 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
 
         <div className="col-span-2 flex items-center justify-between gap-5 sm:col-span-1 sm:justify-end">
           {!inTopic && <StageMeter stage={signal.stage} rule={signal.stage_evidence.rule} />}
-          <Stat value={signal.jev_score === null ? "—" : String(signal.jev_score)} label="JEV" />
+          <Stat value={signal.jev_score === null ? "—" : String(signal.jev_score)} label="JEV" help={HELP.jev} />
           {signal.outlier_score !== null ? (
             <span title="Cálculo de 30X con datos de YouTube: vistas del video dividido entre el promedio de vistas del canal. No es una métrica de YouTube.">
-              <Stat value={`×${signal.outlier_score >= 10 ? Math.round(signal.outlier_score) : signal.outlier_score}`} label="sobre su promedio" emphasis={signal.outlier_score >= 5} />
+              <Stat value={`×${signal.outlier_score >= 10 ? Math.round(signal.outlier_score) : signal.outlier_score}`} label="sobre su promedio" emphasis={signal.outlier_score >= 5} help={HELP.outlier} />
             </span>
           ) : (
             <Stat value={compact(m.views ?? m.likes)} label={m.views !== null ? "vistas" : m.likes !== null ? "reacciones" : "sin métricas"} />
           )}
           <ChevronDown className={`size-5 shrink-0 text-tinta transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden />
         </div>
-      </button>
+      </ToggleRow>
 
       {expanded && (
         <div id={panelId} className="space-y-5 px-4 pb-5 sm:pl-20">
@@ -364,7 +368,7 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                     [
                       ["Impacto en negocio", a.jev.breakdown.business_impact, "40 %"],
                       ["Aplicable sin un gran equipo técnico", a.jev.breakdown.practical_applicability, "35 %"],
-                      ["Claridad ejecutiva", a.jev.breakdown.executive_clarity, "25 %"],
+                      ["Claridad para la audiencia", a.jev.breakdown.executive_clarity, "25 %"],
                     ] as const
                   ).map(([label, value, weight]) => (
                     <div key={label} className="grid grid-cols-[1fr_2.5rem] items-center gap-3 text-sm">
@@ -400,7 +404,7 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                       <span className="font-semibold">Ángulo contrarian:</span> {a.adaptations.contrarian_angle}
                     </p>
                   )}
-                  <Scripts adaptations={a.adaptations} />
+                  <Scripts adaptations={a.adaptations} personalLabel={a.profile?.personal_label ?? "voz personal"} brandLabel={a.profile?.brand_label ?? "voz de marca"} />
                 </Section>
               ) : (
                 <Section title="Sin guiones">
@@ -419,7 +423,7 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                     </div>
                   ) : (
                     <p className="max-w-prose text-sm text-tinta">
-                      El score JEV quedó por debajo del umbral: esta pieza no le sirve lo suficiente a la audiencia de 30X como para adaptarla.
+                      El score JEV quedó por debajo del umbral: esta pieza no le sirve lo suficiente a la audiencia de este perfil como para adaptarla.
                     </p>
                   )}
                 </Section>

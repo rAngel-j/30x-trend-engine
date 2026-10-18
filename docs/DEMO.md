@@ -1,6 +1,6 @@
 # Guion de demo — Lunes AI
 
-Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre. Las diapositivas que acompañan este guion están en [`docs/pitch/Lunes-AI-pitch.pptx`](pitch/Lunes-AI-pitch.pptx) (con notas del orador).
+Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre. Las diapositivas que acompañan este guion están en [`docs/pitch/Lunes-AI-pitch.pptx`](pitch/Lunes-AI-pitch.pptx) (con notas del orador). Para el video grabado, el guion de locución palabra por palabra está en [`docs/GUION_VIDEO.md`](GUION_VIDEO.md).
 
 ---
 

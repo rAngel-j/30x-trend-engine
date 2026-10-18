@@ -2,6 +2,12 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.6.1] — 2026-10-18 · Radar en la nube
+
+### Corregido
+- **"Error interno" al actualizar el radar en la app publicada:** PostgREST recibe los filtros `in.(…)` en la URL y Supabase rechaza más de ~200 huellas (medido: 150 ✔, 250 ✖). Un radar de 4 redes junta 400+ piezas. Lecturas por huella o id y upserts van ahora en bloques de 100; el upsert deja una fila por huella. Verificado contra Supabase real con 600+ ids.
+- Los errores de Supabase llegan a la interfaz con su motivo (502) en vez de "Error interno".
+
 ## [1.6.0] — 2026-10-18 · Publicar en una URL
 
 ### Añadido

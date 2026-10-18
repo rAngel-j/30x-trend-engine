@@ -12,6 +12,7 @@ import { dirname, resolve } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { optionalEnv } from "@/lib/env";
+import { SourceError } from "@/lib/errors";
 import { normalizeAdaptations } from "@/lib/intelligence/bilbao-adapter";
 import { computePriority } from "@/lib/intelligence/trend-stage";
 import { scrubIndexedTitle, scrubText } from "@/lib/privacy";
@@ -263,6 +264,18 @@ function attachRepresentatives(topics: RadarTopic[], signals: TrendSignal[]): Ra
   return topics.map((t) => ({ ...t, representative: t.representative_id ? byId.get(t.representative_id) ?? null : null }));
 }
 
+/**
+ * PostgREST recibe los filtros `in.(…)` en la URL: con más de ~200 huellas sha256 Supabase responde
+ * "Bad Request" (un radar de 4 redes junta 400+ piezas). Las listas largas van en bloques.
+ */
+const IN_CHUNK = 100;
+
+function chunk<T>(items: T[], size = IN_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 function clampLimit(limit?: number): number {
   return Math.min(Math.max(Math.trunc(limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
 }
@@ -300,26 +313,36 @@ class SupabaseTrendRepository implements TrendRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   private fail(error: { message: string } | null): void {
-    if (error) throw new Error(`Supabase: ${error.message}`);
+    // SourceError: la interfaz muestra el motivo real (502) en vez de "Error interno".
+    if (error) throw new SourceError("Supabase", error.message || "la base de datos no respondió");
   }
 
   async upsertSignals(signals: StagedSignal[]): Promise<TrendSignal[]> {
     if (signals.length === 0) return [];
     const fingerprints = signals.map((s) => fingerprintUrl(s.url));
-    const { data: existing, error: readError } = await this.client
-      .from("trend_signals")
-      .select("fingerprint, jev_score")
-      .in("fingerprint", fingerprints);
-    this.fail(readError);
-    const jevByFingerprint = new Map(existing?.map((r) => [r.fingerprint as string, toNumber(r.jev_score)]));
+    const jevByFingerprint = new Map<string, number | null>();
+    for (const part of chunk([...new Set(fingerprints)])) {
+      const { data: existing, error: readError } = await this.client
+        .from("trend_signals")
+        .select("fingerprint, jev_score")
+        .in("fingerprint", part);
+      this.fail(readError);
+      for (const r of existing ?? []) jevByFingerprint.set(r.fingerprint as string, toNumber(r.jev_score));
+    }
 
-    const rows = signals.map((s, i) => ingestRow(s, computePriority(s, jevByFingerprint.get(fingerprints[i]!) ?? null)));
-    const { data, error } = await this.client
-      .from("trend_signals")
-      .upsert(rows, { onConflict: "fingerprint" })
-      .select(LIST_COLUMNS.join(","));
-    this.fail(error);
-    return (data as unknown as Record<string, unknown>[]).map((r) => rowToSignal(r));
+    // Postgres rechaza un upsert que toca la misma fila dos veces: una fila por huella (gana la última).
+    const byFingerprint = new Map(signals.map((s, i) => [fingerprints[i]!, s]));
+    const rows = [...byFingerprint].map(([fp, s]) => ingestRow(s, computePriority(s, jevByFingerprint.get(fp) ?? null)));
+    const stored: TrendSignal[] = [];
+    for (const part of chunk(rows)) {
+      const { data, error } = await this.client
+        .from("trend_signals")
+        .upsert(part, { onConflict: "fingerprint" })
+        .select(LIST_COLUMNS.join(","));
+      this.fail(error);
+      stored.push(...(data as unknown as Record<string, unknown>[]).map((r) => rowToSignal(r)));
+    }
+    return stored;
   }
 
   async saveAnalysis(id: string, analysis: TrendAnalysis): Promise<TrendSignal> {
@@ -369,9 +392,13 @@ class SupabaseTrendRepository implements TrendRepository {
 
   async getSignalsByIds(ids: string[], profileId?: string): Promise<TrendSignal[]> {
     if (ids.length === 0) return [];
-    const { data, error } = await this.client.from("trend_signals").select(LIST_COLUMNS.join(",")).in("id", ids);
-    this.fail(error);
-    return (data as unknown as Record<string, unknown>[]).map((r) => rowToSignal(r, profileId));
+    const out: TrendSignal[] = [];
+    for (const part of chunk([...new Set(ids)])) {
+      const { data, error } = await this.client.from("trend_signals").select(LIST_COLUMNS.join(",")).in("id", part);
+      this.fail(error);
+      out.push(...(data as unknown as Record<string, unknown>[]).map((r) => rowToSignal(r, profileId)));
+    }
+    return out;
   }
 
   async querySignals(filters: TrendFilters): Promise<TrendPage> {

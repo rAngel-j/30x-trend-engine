@@ -1,6 +1,6 @@
 {
   "name": "30x-trend-engine",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": true,
   "description": "30X Trend Intelligence Engine: descubrimiento de tendencias en tiempo real, autopsia forense 5D, filtro JEV LatAm y adaptación al ADN de @30x / @andresbilbao.",
   "engines": {

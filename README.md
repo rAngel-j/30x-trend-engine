@@ -227,7 +227,7 @@ Contratos completos, ejemplos de respuesta y códigos de error: [`docs/API_CONTR
 | Endpoints en vivo | Códigos 200 / 400 / 401 / 404 / 503 según contrato, deduplicación de URLs, webhook real a Slack |
 | Interfaz | Revisada en navegador, de escritorio a 375 px sin scroll horizontal; foco visible y `prefers-reduced-motion` |
 
-**Validado con claves reales (YouTube + Gemini)**: corridas completas del Radar semanal sobre 96 piezas de YouTube, 9-10 temas, autopsias, JEV y guiones en 3 solicitudes, sin datos de identidad en la salida. **Pendiente**: ingesta de Tavily (LinkedIn, Instagram, TikTok), análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
+**Validado con claves reales (YouTube, Tavily y Gemini)**: radar solo de LinkedIn (113 piezas, 7 temas, todas las autopsias y guiones) y radar en 4 redes (403 piezas, 10 temas). Antes: corridas completas del Radar semanal sobre 96 piezas de YouTube, 9-10 temas, autopsias, JEV y guiones en 3 solicitudes, sin datos de identidad en la salida. **Pendiente**: ingesta de Tavily (LinkedIn, Instagram, TikTok), análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
 
 ### Límites conocidos (y cómo se manejan)
 

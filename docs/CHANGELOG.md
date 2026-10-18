@@ -2,6 +2,17 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.4.2] — 2026-10-18 · Radar de LinkedIn listo para la demo
+
+### Corregido
+- **Semana anclada a la cobertura del índice:** el índice de LinkedIn llegaba 5 días atrás y "esta semana" salía casi vacía, así que todo parecía decrecer o saturado. Cada red se mide ahora hasta la fecha más reciente que tiene indexada, y la interfaz lo indica.
+- Los temas sin al menos 2 piezas dentro de las dos semanas medidas ya no entran al ranking.
+- **Fallo de red al generar guiones:** antes descartaba también las autopsias ya hechas. Ahora la autopsia se guarda con `scripts_error`, la interfaz ofrece "Generar guiones de nuevo" y el siguiente radar los regenera.
+- Los fallos de red transitorios ("fetch failed", conexión cortada) se reintentan como el 503.
+
+### Verificado con datos reales
+- Radar solo de LinkedIn (la pregunta del entregable): 113 piezas, 7 temas con evidencia, 7/7 autopsias, guiones en los 6 con JEV ≥ 55 y ángulo contrarian en todos los temas saturados con guiones. Sin correos ni campos de identidad en la salida.
+
 ## [1.4.1] — 2026-10-18 · Prueba real en 4 redes y privacidad reforzada
 
 ### Corregido

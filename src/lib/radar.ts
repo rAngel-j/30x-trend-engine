@@ -15,6 +15,8 @@ import { collectSignals, mergeReports } from "@/lib/sources";
 import { canonicalizeUrl } from "@/lib/url";
 import type { Network, RadarResult, SourceReport, StagedSignal, TrendSignal } from "@/types/trends";
 
+const NETWORK_NAMES: Record<Network, string> = { youtube: "YouTube", linkedin: "LinkedIn", instagram: "Instagram", tiktok: "TikTok", web: "Web" };
+
 /** Una búsqueda de 14 días por semilla permite contar esta semana y la anterior sin pagar dos búsquedas. */
 export const RADAR_WINDOW_DAYS = 14;
 const PER_SOURCE = 15;
@@ -64,24 +66,53 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
   if (clusters.length === 0) notes.push("No hubo piezas suficientes para formar temas. Revisa las fuentes conectadas o amplía las semillas.");
 
   const now = Date.now();
+
+  // Los buscadores tardan días en indexar LinkedIn, Instagram y TikTok: medir "esta semana" contra hoy haría
+  // que todo pareciera decrecer. Cada red se ancla a la fecha más reciente que ya tiene indexada
+  // y se mide la última semana CUBIERTA (docs/ARCHITECTURE.md §7b-quater).
+  const anchors = new Map<Network, number>();
+  for (const s of stored) {
+    const t = s.published_at ? new Date(s.published_at).getTime() : NaN;
+    if (Number.isFinite(t) && t <= now) anchors.set(s.network, Math.max(anchors.get(s.network) ?? 0, t));
+  }
+  const DAY = 86_400_000;
+  for (const [network, anchor] of anchors) {
+    if (now - anchor > DAY) {
+      notes.push(`${NETWORK_NAMES[network]}: el índice de búsqueda llega hasta el ${new Date(anchor).toLocaleDateString("es-CO", { day: "numeric", month: "long" })}; "esta semana" se mide hasta esa fecha.`);
+    }
+  }
+  const aligned = (s: TrendSignal): TrendSignal => {
+    const anchor = anchors.get(s.network);
+    if (!s.published_at || anchor === undefined) return s;
+    return { ...s, published_at: new Date(new Date(s.published_at).getTime() + (now - anchor)).toISOString() };
+  };
+
   const candidates = clusters
     .map((c) => {
-      const growth = computeTopicGrowth(c.members, now);
-      const stage = evaluateStage(c.members, now);
-      return { ...c, growth, stage, preScore: topicScore(growth, null) };
+      const members = c.members.map(aligned);
+      const growth = computeTopicGrowth(members, now);
+      const stage = evaluateStage(members, now);
+      return { ...c, alignedMembers: members, growth, stage, preScore: topicScore(growth, null) };
     })
+    // Un tema necesita al menos 2 piezas dentro de las dos semanas medidas para tener evidencia de tendencia.
+    .filter((c) => c.growth.this_week + c.growth.last_week >= 2)
     .sort((a, b) => b.preScore - a.preScore)
     .slice(0, options.maxTopics + EXTRA_CANDIDATES);
 
   // 3. Por qué funciona y cómo adaptarlo: autopsia de la pieza más representativa de cada tema.
   // Un solo lote para todas las piezas representativas: 2 solicitudes a Gemini en total.
-  const withRep = candidates.map((c) => ({ ...c, rep: pickRepresentative(c.members, now) as TrendSignal | null }));
+  // La pieza se elige con fechas alineadas, pero se guarda/analiza la pieza original.
+  const withRep = candidates.map((c) => {
+    const picked = pickRepresentative(c.alignedMembers, now);
+    return { ...c, rep: picked ? c.members.find((m) => m.id === picked.id) ?? null : null };
+  });
   // Se reutiliza el análisis guardado salvo que no cumpla la regla de su tema: un tema saturado
   // exige ángulo contrarian, y la pieza pudo analizarse antes con otra etapa.
   const needsAnalysis = (c: (typeof withRep)[number]) => {
     const rep = c.rep;
     if (!rep) return false;
     if (rep.analysis_status !== "analyzed") return true;
+    if (rep.analysis?.scripts_error) return true; // guiones que fallaron en una corrida anterior
     const scripts = rep.analysis?.adaptations;
     return c.stage.stage === "saturated" && Boolean(scripts) && !scripts!.contrarian_angle;
   };

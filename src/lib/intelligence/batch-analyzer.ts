@@ -137,11 +137,12 @@ ${dna}`,
   items.forEach((_, i) => {
     const a = autopsies[i];
     if (!a) return;
-    if (scriptsError && eligible.includes(i)) {
-      outcomes[i] = { ok: false, error: `Autopsia lista, pero fallaron los guiones: ${scriptsError}` };
-      return;
-    }
-    outcomes[i] = { ok: true, analysis: { forensic: a.forensic, jev: a.jev, adaptations: scripts.get(i) ?? null, model: GEMINI_MODEL(), analyzed_at: analyzedAt } };
+    // Si los guiones fallan, la autopsia (ya pagada) se guarda igual y se marca para regenerar los guiones.
+    const scriptsMissing = eligible.includes(i) && !scripts.has(i) && scriptsError ? scriptsError : null;
+    outcomes[i] = {
+      ok: true,
+      analysis: { forensic: a.forensic, jev: a.jev, adaptations: scripts.get(i) ?? null, scripts_error: scriptsMissing, model: GEMINI_MODEL(), analyzed_at: analyzedAt },
+    };
   });
   return outcomes;
 }

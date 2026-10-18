@@ -334,7 +334,11 @@ Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de 50 + 30·log2(9/3) �
 
 **Costo por corrida** (4 redes, 8 semillas): YouTube ≈ 816 unidades (8 % de la cuota diaria gratuita), Tavily ≈ 24 créditos en profundidad `basic`, Gemini **3 solicitudes** (1 agrupación + 2 de análisis en lote, §5.1). Las piezas ya analizadas no se vuelven a pagar.
 
-**Límites honestos:** los índices de búsqueda tardan en indexar, así que la semana en curso puede verse subrepresentada frente a la anterior (el crecimiento es conservador). Las piezas sin fecha no cuentan para el crecimiento.
+**Semana anclada a la cobertura del índice:** los buscadores tardan días en indexar LinkedIn, Instagram y TikTok (verificado: el 18 de octubre el índice de LinkedIn llegaba al 13). Medir contra "hoy" hacía que casi todo pareciera decrecer. Por eso cada red se ancla a la fecha más reciente que ya tiene indexada y se compara la última semana cubierta con la anterior. YouTube (API en tiempo real) queda anclado a hoy. La interfaz muestra hasta qué fecha llega cada índice.
+
+**Evidencia mínima:** un tema entra al ranking solo si tiene al menos 2 piezas dentro de las dos semanas medidas. Las piezas sin fecha no cuentan para el crecimiento.
+
+**Guiones que fallan:** si la solicitud de guiones falla (red o cuota), la autopsia y el JEV se guardan igual con `scripts_error`. La interfaz ofrece "Generar guiones de nuevo" y el siguiente radar los regenera solo.
 
 ## 7c. Diagnóstico de conexiones (`npm run doctor`)
 

@@ -177,6 +177,8 @@ export interface TrendAnalysis {
   forensic: ForensicAutopsy;
   jev: JevResult;
   adaptations: BrandAdaptations | null;
+  /** Motivo si los guiones fallaron aunque el JEV superaba el umbral (la autopsia se conserva). */
+  scripts_error?: string | null;
   model: string;
   analyzed_at: string;
 }

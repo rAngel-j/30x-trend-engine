@@ -404,9 +404,24 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                 </Section>
               ) : (
                 <Section title="Sin guiones">
-                  <p className="max-w-prose text-sm text-tinta">
-                    El score JEV quedó por debajo del umbral: esta pieza no le sirve lo suficiente a la audiencia de 30X como para adaptarla.
-                  </p>
+                  {a.scripts_error ? (
+                    <div className="space-y-3">
+                      <p className="max-w-prose text-sm text-alerta">Los guiones no se pudieron generar: {a.scripts_error}</p>
+                      <button
+                        type="button"
+                        onClick={analyze}
+                        disabled={analyzing}
+                        className="inline-flex items-center gap-2 rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-crema hover:bg-carbon/90 disabled:opacity-60"
+                      >
+                        {analyzing ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Sparkles className="size-4" aria-hidden />}
+                        {analyzing ? "Generando…" : "Generar guiones de nuevo"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="max-w-prose text-sm text-tinta">
+                      El score JEV quedó por debajo del umbral: esta pieza no le sirve lo suficiente a la audiencia de 30X como para adaptarla.
+                    </p>
+                  )}
                 </Section>
               )}
             </>

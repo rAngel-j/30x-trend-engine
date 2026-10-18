@@ -53,7 +53,8 @@ async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
       const message = err instanceof Error ? err.message : String(err);
       const status = (err as { status?: number }).status;
       const rateLimited = status === 429 || /RESOURCE_EXHAUSTED|rate limit|quota/i.test(message);
-      const overloaded = status === 503 || /UNAVAILABLE|high demand|overloaded/i.test(message);
+      // 503 "alta demanda" y fallos de red transitorios (conexión cortada, timeout) se reintentan igual.
+      const overloaded = status === 503 || /UNAVAILABLE|high demand|overloaded|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|network/i.test(message);
       const hinted = parseRetryDelay(message);
       const daily = rateLimited && hinted !== null && hinted > MAX_RETRY_WAIT_MS;
 

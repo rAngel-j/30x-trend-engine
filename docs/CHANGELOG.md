@@ -2,6 +2,18 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.1.0] — 2026-10-17 · Puesta en marcha
+
+### Añadido
+- `npm run doctor` (`scripts/doctor.ts`): prueba cada credencial de `.env.local` contra el servicio real con la llamada más barata (Gemini `models.get`, YouTube 1 unidad, Tavily 1 crédito, `count` en Supabase, esquema de Notion; Slack y Make solo formato para no enviar mensajes). Nunca imprime claves y sale con código 1 si falta lo mínimo (Gemini + una fuente).
+- README: guía paso a paso para obtener las claves gratuitas de Gemini, YouTube y Tavily.
+
+### Cambiado
+- `errorMessage()` extrae el mensaje legible cuando un SDK devuelve el cuerpo JSON del proveedor (p. ej. Gemini). Mejora los errores del diagnóstico y los `analysis_error` guardados.
+
+### Verificado
+- Sin claves: el diagnóstico lista lo que falta y qué desbloquea cada una. Con claves inválidas de prueba: Gemini y YouTube reportan el error real del proveedor y Slack rechaza una URL no oficial.
+
 ## [1.0.0] — 2026-10-17 · Fase 5: Auditoría y README final
 
 ### Corregido (hallazgos de la auditoría)

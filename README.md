@@ -135,6 +135,20 @@ Completa en `.env.local` las claves que tengas. **Ninguna es obligatoria para ar
 | `TAVILY_API_KEY` | LinkedIn, Instagram y TikTok | app.tavily.com |
 | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Base en la nube (si faltan, SQLite local en `.data/`) | supabase.com |
 
+**Para operar con datos reales lo mínimo es Gemini + YouTube o Tavily.** Las tres tienen plan gratuito:
+
+1. **Gemini**: entra a aistudio.google.com con tu cuenta de Google → *Get API key* → pégala en `GEMINI_API_KEY`.
+2. **YouTube**: en console.cloud.google.com crea un proyecto → *APIs y servicios* → habilita **YouTube Data API v3** → *Credenciales* → *Crear clave de API* → `YOUTUBE_API_KEY` (10.000 unidades diarias gratis, unas 95 búsquedas).
+3. **Tavily**: crea tu cuenta en app.tavily.com y copia la clave del panel → `TAVILY_API_KEY`.
+
+Las claves van **solo** en `.env.local`, que git ignora. Comprueba que funcionan sin abrir la app:
+
+```bash
+npm run doctor
+```
+
+El diagnóstico prueba cada clave contra el servicio real con la llamada más barata posible y te dice cuál falta o qué error devolvió el proveedor, sin mostrar nunca las claves.
+
 Si usas Supabase, aplica la migración [`supabase/migrations/001_trend_signals.sql`](supabase/migrations/001_trend_signals.sql) desde el SQL Editor o con `supabase db push`.
 
 ```bash

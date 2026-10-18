@@ -240,6 +240,23 @@ flowchart LR
 - Esquema: `supabase/migrations/001_trend_signals.sql` (índices compuestos por cada filtro de la `ControlBar`).
 - SQLite usa el `node:sqlite` nativo de Node ≥ 22.13 en vez de Prisma/Drizzle: cero binarios nativos que compilar en Windows y cero paso de generación, que es lo que exige "nunca falle en local".
 
+## 7c. Diagnóstico de conexiones (`npm run doctor`)
+
+`scripts/doctor.ts` lee `.env.local` y prueba cada servicio con la llamada **más barata posible** contra la API real, sin escribir datos:
+
+| Servicio | Prueba | Costo |
+|---|---|---|
+| Gemini | `models.get` del modelo configurado | 0 tokens |
+| YouTube Data API | `videos.list` de un video público | 1 unidad de cuota |
+| Tavily | búsqueda `basic` de 1 resultado | 1 crédito |
+| Google CSE | consulta de 1 resultado | 1 consulta |
+| Jina Reader | lectura de `https://example.com` | mínima |
+| Supabase | `count` sobre `trend_signals` (confirma que la migración está aplicada) | 0 |
+| Notion | lectura del esquema de la base | 0 |
+| Slack / Make | solo formato de la URL (probarlos enviaría un mensaje real) | 0 |
+
+Nunca imprime valores de claves: solo `OK`, `FALTA` o el error del proveedor. Sale con código 1 si falla algo **mínimo** para operar (Gemini + al menos una fuente de descubrimiento).
+
 ## 8. Limitaciones conocidas
 
 - **Jina Reader anónimo** puede bloquear dominios muy consultados (verificado: `youtube.com` devolvió 403 sin clave). Para YouTube no importa porque el sensor usa la YouTube API + oEmbed; para LinkedIn conviene configurar `JINA_API_KEY`.

@@ -33,7 +33,17 @@ export class AiOutputError extends Error {
 }
 
 export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const raw = err instanceof Error ? err.message : String(err);
+  // Los SDKs (p. ej. @google/genai) a veces devuelven el cuerpo JSON del proveedor como mensaje.
+  if (raw.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw) as { error?: { message?: string; status?: string } };
+      if (parsed.error?.message) return parsed.error.status ? `${parsed.error.message} (${parsed.error.status})` : parsed.error.message;
+    } catch {
+      /* no era JSON: se devuelve tal cual */
+    }
+  }
+  return raw;
 }
 
 export class NotFoundError extends Error {

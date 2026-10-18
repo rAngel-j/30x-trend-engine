@@ -24,8 +24,7 @@ Cada fila de `trend_signals` responde las 3 preguntas del reto:
   "url": "https://…",
   "title": "…",
   "excerpt": "…",
-  "author_name": "…", "author_handle": "…", "author_url": "…",
-  "thumbnail_url": "…",
+  // Sin datos personales: no hay nombre, handle, perfil ni miniatura del autor (ARCHITECTURE §7b-ter)
   "published_at": "2026-10-15T14:00:00.000Z",
   "language": "es | en | pt | other",
   "format_hint": "short_vertical | long_video | reel | image_post | text_post | article | unknown",
@@ -69,6 +68,9 @@ Cada fila de `trend_signals` responde las 3 preguntas del reto:
 
 | Función | Firma | Notas |
 |---|---|---|
+| `runRadar` | `(repo, { networks, maxTopics }) => Promise<RadarResult>` | Radar semanal completo (`src/lib/radar.ts`). Requiere Gemini. |
+| `clusterTopics` | `(signals) => Promise<TopicCluster[]>` | Una llamada a Gemini; valida índices y exige ≥ 2 piezas por tema. |
+| `computeTopicGrowth` | `(members, now?) => TopicGrowth` | Esta semana vs. anterior, crecimiento y volumen (deterministas). |
 | `classifyCohort` | `(signals: RawSignal[]) => StagedSignal[]` | Determinista. Detecta idioma y asigna etapa a toda la cohorte. |
 | `detectLanguage` | `(text: string) => Language \| null` | Heurística de stopwords. |
 | `runForensic5D` | `(signal: StagedSignal, content?: string) => Promise<ForensicAutopsy>` | Gemini + `responseSchema`. |
@@ -162,7 +164,7 @@ Parámetros con valores fuera del dominio (p. ej. `stages=viral`) → `400 INVAL
 
 ```jsonc
 // Request (UI o webhook externo: Slack Workflow, Make, Zapier…) — envía url O id
-{ "url": "https://www.linkedin.com/posts/…", "submitted_by": "maria@30x", "text": "Texto del post tal como lo viste (opcional, ≤ 8 000)", "force": false }
+{ "url": "https://www.linkedin.com/posts/…", "text": "Texto del post tal como lo viste (opcional, ≤ 8 000)", "force": false }
 // Re-análisis de una señal ya guardada (botón "Analizar con IA"): leer la URL es opcional
 { "id": "uuid", "force": true }
 // Response 200
@@ -211,6 +213,42 @@ Parámetros con valores fuera del dominio (p. ej. `stages=viral`) → `400 INVAL
 **Payload Notion** (`POST /v1/pages`): el conector **lee el esquema de la base** y solo llena las propiedades que existen con el tipo correcto. Nombres reconocidos (insensible a mayúsculas/acentos): título → propiedad `title` de la base; `Red` (select), `Etapa` (select), `Formato` (select), `JEV` (number), `Outlier` (number), `URL` (url), `Publicado` (date). Cuerpo: autopsia 5D, desglose JEV, guion del Reel y slides del carrusel.
 
 **Payload Make** (webhook genérico): `{ "event": "trend.exported", "sent_at": ISO, "signal": TrendSignal }`.
+
+### `POST /api/radar` — ejecutar el Radar semanal
+
+```jsonc
+// Request
+{ "networks": ["linkedin", "youtube", "instagram", "tiktok"], "maxTopics": 10 }
+// Response 200
+{
+  "run": {
+    "id": "uuid", "created_at": ISO, "networks": [...], "seeds": ["agentes de IA para empresas", "AI agents for business", …],
+    "signals_found": 143, "sources": SourceReport[], "notes": [], "took_ms": 84210
+  },
+  "topics": RadarTopic[]           // ordenados por score, máx. maxTopics
+}
+// 503 NO_SOURCES si ninguna fuente está configurada · 503 MISSING_CREDENTIAL si falta GEMINI_API_KEY (agrupar temas requiere IA)
+```
+
+`RadarTopic`:
+```jsonc
+{
+  "rank": 1,
+  "label": "Agentes de IA en ventas B2B",
+  "thesis": "Equipos comerciales que delegan la prospección a agentes",
+  "this_week": 8, "last_week": 2,
+  "growth_index": 98, "volume_index": 80, "score": 88.4,
+  "stage": "emerging", "stage_evidence": StageEvidence,
+  "jev_score": 84,
+  "networks": ["linkedin", "youtube"],
+  "representative": TrendSignal,   // con analysis: las 5 variables, JEV y guiones
+  "member_ids": ["uuid", …]
+}
+```
+
+### `GET /api/radar` — último radar guardado
+
+`?run=<uuid>` devuelve una corrida concreta; sin parámetros, la más reciente. Misma forma que la respuesta de `POST`. `404` si no hay ninguna.
 
 ### `GET /api/status` — qué está configurado
 

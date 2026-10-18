@@ -91,3 +91,18 @@ jev_latam_score = round(0.40 · impacto + 0.35 · aplicabilidad + 0.25 · clarid
 - No mencionar a la pieza o autor original en el guion salvo para citar un dato con fuente.
 - No prometer resultados garantizados.
 - No usar miedo ("la IA te va a reemplazar") como gancho principal; sí urgencia basada en oportunidad.
+
+---
+
+## 7. Semillas del Radar semanal
+
+Consultas con las que el Radar barre las redes cada semana. Van en pares **español + inglés** para poder detectar temas que aceleran en inglés antes de llegar al español. Una semilla por línea; el equipo puede editarlas (✏️ propuesta inicial).
+
+- agentes de IA para empresas
+- AI agents for business
+- IA generativa en ventas y marketing
+- generative AI for sales and marketing
+- liderazgo y adopción de IA en equipos
+- AI adoption leadership teams
+- automatización con IA para pymes
+- AI automation for small business

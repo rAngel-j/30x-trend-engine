@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import CommunitySensor from "@/components/CommunitySensor";
 import ControlBar from "@/components/ControlBar";
 import PlugAndPlayConfig from "@/components/PlugAndPlayConfig";
+import RadarBoard from "@/components/RadarBoard";
 import TrendCard from "@/components/TrendCard";
 import {
   ApiError,
@@ -126,13 +127,14 @@ export default function RadarPage() {
     });
   };
 
-  const handleAnalyze = async (signal: TrendSignal) => {
+  const handleAnalyze = async (signal: TrendSignal): Promise<TrendSignal | void> => {
     try {
       const res = await analyzeUrl({ id: signal.id, force: true });
       replaceItem(res.item);
       if (res.item.analysis_status !== "analyzed") {
         setNotice({ tone: "warn", text: res.item.analysis_error ?? res.warnings.at(-1) ?? "La pieza sigue sin analizar." });
       }
+      return res.item;
     } catch (err) {
       setNotice({ tone: "error", text: err instanceof ApiError ? err.message : "No se pudo analizar la pieza." });
     }
@@ -164,8 +166,11 @@ export default function RadarPage() {
         <PlugAndPlayConfig onOverridesChange={onOverridesChange} />
       </header>
 
-      <form onSubmit={runDiscovery} className="pt-8 pb-6 sm:pt-14">
-        <h1 className="semiwide max-w-5xl text-4xl leading-[1.08] font-bold sm:text-6xl">
+      <RadarBoard onAnalyze={handleAnalyze} onExport={handleExport} />
+
+      <form onSubmit={runDiscovery} className="mt-16 border-t border-arena pt-10 pb-6">
+        <p className="mb-3 text-sm text-tinta">¿Tienes un tema concreto en mente? Explóralo pieza por pieza.</p>
+        <h2 className="semiwide max-w-5xl text-3xl leading-[1.1] font-bold sm:text-4xl">
           <label htmlFor="hero-query">¿Qué está despegando sobre</label>{" "}
           <span className="inline-flex w-full max-w-[16ch] items-end">
             <input
@@ -180,7 +185,7 @@ export default function RadarPage() {
             />
             <span aria-hidden>?</span>
           </span>
-        </h1>
+        </h2>
 
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
           <fieldset className="flex flex-wrap gap-2">

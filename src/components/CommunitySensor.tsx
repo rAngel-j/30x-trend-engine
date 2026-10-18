@@ -5,7 +5,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { analyzeUrl, ApiError } from "@/lib/client/api";
 import type { TrendSignal } from "@/types/trends";
 
-const NAME_KEY = "30x.sensorName";
+/** Versiones anteriores guardaban el nombre de quien enviaba: se borra (privacidad). */
+const LEGACY_NAME_KEY = "30x.sensorName";
 
 interface CommunitySensorProps {
   onAnalyzed: (item: TrendSignal) => void;
@@ -15,16 +16,15 @@ type Feedback = { tone: "ok" | "warn" | "error"; text: string } | null;
 
 export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
   const [url, setUrl] = useState("");
-  const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
   useEffect(() => {
     try {
-      setName(window.localStorage.getItem(NAME_KEY) ?? "");
+      window.localStorage.removeItem(LEGACY_NAME_KEY);
     } catch {
-      /* sin almacenamiento: el nombre es opcional */
+      /* sin almacenamiento: nada que borrar */
     }
   }, []);
 
@@ -34,12 +34,7 @@ export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
     setBusy(true);
     setFeedback(null);
     try {
-      try {
-        if (name.trim()) window.localStorage.setItem(NAME_KEY, name.trim());
-      } catch {
-        /* ignorar */
-      }
-      const res = await analyzeUrl({ url: url.trim(), submitted_by: name.trim() || undefined, text: text.trim() || undefined });
+      const res = await analyzeUrl({ url: url.trim(), text: text.trim() || undefined });
       onAnalyzed(res.item);
       setUrl("");
       setText("");
@@ -80,14 +75,6 @@ export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
             className="w-full rounded-lg border border-arena bg-crema py-2 pr-3 pl-9 text-sm placeholder:text-ceniza focus:border-carbon focus:outline-none"
           />
         </div>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Tu nombre (opcional)"
-          aria-label="Tu nombre"
-          className="rounded-lg border border-arena bg-crema px-3 py-2 text-sm placeholder:text-ceniza focus:border-carbon focus:outline-none sm:w-44"
-        />
         <button
           type="submit"
           disabled={busy}

@@ -17,6 +17,29 @@ function gemini(): GoogleGenAI {
   return client;
 }
 
+const MAX_RATE_RETRIES = 3;
+
+/**
+ * El plan gratuito de Gemini limita peticiones por minuto. Ante un 429 / RESOURCE_EXHAUSTED se espera
+ * lo que indique el proveedor ("retry in Ns") o un backoff creciente, y se reintenta.
+ */
+async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const rateLimited = /429|RESOURCE_EXHAUSTED|rate limit|quota/i.test(message);
+      // La cuota diaria agotada no se arregla esperando unos segundos.
+      const dailyQuota = /per ?day|PerDay/i.test(message);
+      if (!rateLimited || dailyQuota || attempt >= MAX_RATE_RETRIES) throw err;
+      const hinted = Number(message.match(/retry(?:Delay)?["\s:in]*"?(\d+(?:\.\d+)?)s/i)?.[1]);
+      const waitMs = Number.isFinite(hinted) && hinted > 0 ? Math.min(hinted * 1000 + 500, 60_000) : 5_000 * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 export interface StructuredRequest<T> {
   task: string;
   system: string;
@@ -29,7 +52,7 @@ export interface StructuredRequest<T> {
 export async function generateStructured<T>({ task, system, prompt, schema, validator, temperature = 0.4 }: StructuredRequest<T>): Promise<T> {
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await gemini().models.generateContent({
+    const res = await withRateLimitRetry(() => gemini().models.generateContent({
       model: GEMINI_MODEL(),
       contents: attempt === 0 ? prompt : `${prompt}\n\nTu respuesta anterior no cumplió el esquema (${lastError}). Responde de nuevo cumpliéndolo exactamente.`,
       config: {
@@ -38,7 +61,7 @@ export async function generateStructured<T>({ task, system, prompt, schema, vali
         responseSchema: schema,
         temperature,
       },
-    });
+    }));
     const text = res.text;
     if (!text) {
       lastError = `respuesta vacía (finishReason: ${res.candidates?.[0]?.finishReason ?? "desconocido"})`;
@@ -70,7 +93,7 @@ export function describeSignal(signal: StagedSignal, content?: string): string {
     `RED: ${signal.network} · FORMATO DETECTADO: ${signal.format_hint} · IDIOMA: ${signal.language ?? "n/d"}`,
     `URL: ${signal.url}`,
     `PUBLICADO: ${signal.published_at ?? "desconocido"}`,
-    `AUTOR: ${signal.author_name ?? "n/d"} (${signal.author_handle ?? "sin handle"}) · seguidores: ${fmt(m.author_followers)} · promedio de vistas del autor: ${fmt(m.author_avg_views)}`,
+    `CUENTA QUE PUBLICÓ (solo cifras, sin identidad): seguidores ${fmt(m.author_followers)} · promedio de vistas por pieza ${fmt(m.author_avg_views)}`,
     `MÉTRICAS: vistas ${fmt(m.views)} · likes ${fmt(m.likes)} · comentarios ${fmt(m.comments)} · compartidos ${fmt(m.shares)} · duración ${m.duration_seconds ?? "n/d"} s`,
     `OUTLIER SCORE: ${signal.outlier_score ?? "n/d"} (vistas / promedio del autor) · VELOCIDAD: ${fmt(signal.velocity_per_hour)} vistas/h · PESO DEL AUTOR: ${signal.author_weight ?? "n/d"} (0 = mérito del contenido, 1 = mérito del autor)`,
     `ETAPA DE LA TENDENCIA: ${signal.stage} (confianza ${signal.stage_score}/100) — ${signal.stage_evidence.rule}`,
@@ -98,4 +121,5 @@ export async function loadBrandDna(): Promise<string> {
 
 export const GROUNDING_RULES = `Reglas de rigor:
 - Basa cada afirmación en la ficha y el contenido entregados. Si un dato no está, dilo explícitamente ("la fuente no lo indica"); nunca inventes cifras, fechas, nombres ni citas.
-- Escribe en español neutro latinoamericano, concreto y sin relleno.`;
+- Escribe en español neutro latinoamericano, concreto y sin relleno.
+- Privacidad: no menciones nombres, handles ni datos de personas. Habla de "la cuenta", "el autor" o "la marca"; si citas el gancho, quita cualquier nombre propio de persona.`;

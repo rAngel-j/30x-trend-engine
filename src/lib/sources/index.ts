@@ -31,7 +31,7 @@ export function validateDiscoveryRequest(req: DiscoveryRequest): DiscoveryReques
 }
 
 /** Une los reportes de la misma fuente a través de varias variantes de consulta. */
-function mergeReports(reports: SourceReport[]): SourceReport[] {
+export function mergeReports(reports: SourceReport[]): SourceReport[] {
   const bySource = new Map<SourceReport["source"], SourceReport>();
   for (const r of reports) {
     const prev = bySource.get(r.source);

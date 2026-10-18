@@ -24,7 +24,6 @@ const AnalyzeBody = z
   .object({
     url: z.string().trim().min(8).max(2048).optional(),
     id: z.string().trim().min(1).max(64).optional(),
-    submitted_by: z.string().trim().max(120).optional(),
     /** Texto que la persona vio públicamente (vía legal para redes cerradas). */
     text: z.string().trim().max(MAX_COMMUNITY_TEXT).optional(),
     force: z.boolean().default(false),
@@ -83,13 +82,9 @@ export async function POST(req: Request) {
     const staged: StagedSignal = existing
       ? { ...single!, stage: existing.stage, stage_score: existing.stage_score, stage_evidence: existing.stage_evidence, query: existing.query }
       : { ...single!, stage_evidence: { ...single!.stage_evidence, rule: `provisional (pieza individual): ${single!.stage_evidence.rule}` } };
-    const previous = (existing?.raw ?? {}) as { submitted_by?: string | null; submitted_at?: string };
-    staged.raw = {
-      ...existing?.raw,
-      ...staged.raw,
-      submitted_by: body.submitted_by ?? previous.submitted_by ?? null,
-      submitted_at: previous.submitted_at ?? new Date().toISOString(),
-    };
+    // Privacidad: no se registra quién envía el enlace, solo cuándo llegó por primera vez.
+    const previous = (existing?.raw ?? {}) as { submitted_at?: string };
+    staged.raw = { ...staged.raw, submitted_at: previous.submitted_at ?? new Date().toISOString() };
 
     const [stored] = await repo.upsertSignals([staged]);
     const warnings = [...reading.warnings];

@@ -267,6 +267,55 @@ flowchart LR
 
 **Métricas derivadas y atribución:** Outlier, velocidad, peso del autor, etapa y JEV son cálculos propios y la interfaz los presenta como tales. El pie de página atribuye los datos a YouTube y enlaza sus Términos de servicio y la Política de privacidad de Google.
 
+## 7b-ter. Privacidad: nada de datos personales
+
+Restricción 08 del reto: *solo contenido público y nada de datos personales*. El motor analiza **piezas**, no personas:
+
+| Se guarda | No se guarda |
+|---|---|
+| URL pública de la pieza (necesaria para citarla) | Nombre, handle, URL de perfil o foto del autor |
+| Texto público de la pieza (título, extracto) | Miniaturas (pueden mostrar rostros) |
+| Cifras agregadas de la cuenta: seguidores, promedio de vistas | IDs de canal o de cuenta |
+| Métricas de la pieza | Nombre de quien envía un enlace al Sensor |
+
+- Las URLs de algunas redes contienen el handle (`tiktok.com/@cuenta/…`): es la dirección pública del contenido, no un perfil guardado. No se extrae ni se indexa por separado.
+- "Autor vs. contenido" se resuelve con cifras (seguidores, promedio, Outlier), sin identidad. A Gemini no se le envía ningún nombre ni handle, y se le pide no nombrar personas en sus respuestas.
+- `002_privacy.sql` elimina las columnas de identidad y limpia `raw`. El repositorio SQLite aplica la misma limpieza al abrir una base existente.
+
+## 7b-quater. Radar semanal: los 10 temas que más crecen
+
+Responde el entregable del reto: *"¿cuáles son los 10 temas de IA que más están creciendo esta semana, por qué y cómo lo adaptamos?"*.
+
+```mermaid
+flowchart TB
+    S["Semillas del radar<br/>(30X_BRAND_DNA.md §7, ES + EN)"] --> C["collectSignals()<br/>ventana de 14 días por semilla"]
+    C --> DB[("trend_signals")]
+    C --> K["Gemini: agrupar piezas en temas<br/>(una sola llamada)"]
+    K --> G["Crecimiento determinista por tema<br/>esta semana vs. la anterior"]
+    G --> P["Top 12 por impulso"]
+    P --> A["enrichSignal() de la pieza<br/>más representativa de cada tema"]
+    A --> R["Puntaje final y Top 10"]
+    R --> RT[("radar_runs + radar_topics")]
+```
+
+**Por qué una ventana de 14 días:** con una sola búsqueda por semilla se ven las dos semanas. La fecha de cada pieza es exacta (YouTube la da la API; en LinkedIn, TikTok e Instagram sale del ID público), así que se cuentan las piezas de cada semana sin pagar una segunda búsqueda.
+
+**Métricas por tema (deterministas):**
+```
+esta_semana   = piezas publicadas en los últimos 7 días
+semana_previa = piezas publicadas entre 8 y 14 días atrás
+crecimiento   = clamp(50 + 30 · log2((esta_semana + 1) / (semana_previa + 1)), 0, 100)
+volumen       = min(100, 10 · esta_semana)
+etapa         = evaluateStage(piezas del tema)       (misma regla de §4.3)
+JEV del tema  = JEV de su pieza más representativa
+puntaje       = 0.5 · crecimiento + 0.2 · volumen + 0.3 · JEV
+```
+Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de 50 + 30·log2(9/3) ≈ 98. Si no cambia, se queda en 50.
+
+**Costo por corrida** (4 redes, 8 semillas): YouTube ≈ 816 unidades (8 % de la cuota diaria gratuita), Tavily ≈ 24 créditos en profundidad `basic`, Gemini ≈ 1 llamada de agrupación + 2-3 por tema analizado (≈ 25-30 en total, cubiertas por el plan gratuito). Las piezas ya analizadas no se vuelven a pagar.
+
+**Límites honestos:** los índices de búsqueda tardan en indexar, así que la semana en curso puede verse subrepresentada frente a la anterior (el crecimiento es conservador). Las piezas sin fecha no cuentan para el crecimiento.
+
 ## 7c. Diagnóstico de conexiones (`npm run doctor`)
 
 `scripts/doctor.ts` lee `.env.local` y prueba cada servicio con la llamada **más barata posible** contra la API real, sin escribir datos:

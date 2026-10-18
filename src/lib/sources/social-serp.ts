@@ -6,6 +6,7 @@
 import { optionalEnv } from "@/lib/env";
 import { errorMessage, MissingCredentialError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
+import { scrubIndexedTitle, scrubText } from "@/lib/privacy";
 import { canonicalizeUrl, instagramShortcodeToDate, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
 import type { DiscoveryRequest, FormatHint, Network, RawSignal, SignalMetrics, SourceId, SourceReport } from "@/types/trends";
 
@@ -56,7 +57,7 @@ async function searchTavily(network: SocialNetwork, req: DiscoveryRequest, key: 
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         query: `${req.query} ${spec.hint}`,
-        search_depth: "advanced",
+        search_depth: "basic", // solo snippets del índice: menos extracción y 1 crédito por búsqueda
         topic: "general",
         max_results: Math.min(req.maxPerSource ?? 20, 20),
         include_domains: [spec.domain],
@@ -164,49 +165,22 @@ function publishedAt(network: SocialNetwork, hit: SerpHit): string | null {
   return date ? date.toISOString() : null;
 }
 
-function author(network: SocialNetwork, hit: SerpHit): { name: string | null; handle: string | null; url: string | null } {
-  const url = new URL(hit.url);
-  if (network === "linkedin") {
-    const handle = url.pathname.match(/\/posts\/([^_/]+)_/)?.[1] ?? null;
-    const name = hit.title.match(/^(.+?)\s+(?:on|en|no)\s+LinkedIn/i)?.[1] ?? hit.title.match(/\|\s*([^|]+?)\s*(?:\|\s*\d+\s*comments)?$/i)?.[1] ?? null;
-    return { name, handle, url: handle ? `https://www.linkedin.com/in/${handle}` : null };
-  }
-  if (network === "tiktok") {
-    const handle = url.pathname.match(/\/@([\w.]+)/)?.[1] ?? null;
-    const name = hit.title.match(/^(.+?)\s*\(@[\w.]+\)/)?.[1] ?? null;
-    return { name, handle, url: handle ? `https://www.tiktok.com/@${handle}` : null };
-  }
-  const text = `${hit.title} ${hit.content}`;
-  const handle = url.pathname.match(/^\/([\w.]+)\/(?:p|reel|reels|tv)\//)?.[1] ?? text.match(/\(@([\w.]+)\)/)?.[1] ?? text.match(/-\s*([\w.]+) on [A-Z][a-z]+ \d/)?.[1] ?? null;
-  const name = hit.title.match(/^(.+?)\s+(?:on|en)\s+Instagram/i)?.[1] ?? hit.title.match(/^(.+?)\s*\(@/)?.[1] ?? null;
-  return { name, handle, url: handle ? `https://www.instagram.com/${handle}` : null };
-}
-
 function formatHint(network: SocialNetwork, url: string): FormatHint {
   if (network === "tiktok") return "short_vertical";
   if (network === "instagram") return /\/(reel|reels|tv)\//.test(url) ? "reel" : "image_post";
   return /\/pulse\//.test(url) ? "article" : "text_post";
 }
 
-function cleanTitle(title: string): string {
-  return title.replace(/\s*[|•-]\s*(LinkedIn|Instagram|TikTok).*$/i, "").replace(/^(.+?)\s+(?:on|en)\s+(LinkedIn|Instagram):\s*/i, "").trim();
-}
-
 function toSignal(network: SocialNetwork, hit: SerpHit, query: string): RawSignal {
   const published = publishedAt(network, hit);
   const engagement = extractEngagement(`${hit.title} ${hit.content}`);
-  const who = author(network, hit);
   const hours = published ? Math.max((Date.now() - new Date(published).getTime()) / 3_600_000, 1) : null;
   return {
     network,
     source: hit.provider,
     url: hit.url,
-    title: cleanTitle(hit.title) || hit.content.slice(0, 120),
-    excerpt: hit.content.slice(0, 800),
-    author_name: who.name,
-    author_handle: who.handle,
-    author_url: who.url,
-    thumbnail_url: null,
+    title: scrubIndexedTitle(hit.title) || scrubText(hit.content.slice(0, 120)),
+    excerpt: scrubText(hit.content.slice(0, 800)),
     published_at: published,
     language: null, // lo asigna classifyCohort
     format_hint: formatHint(network, hit.url),

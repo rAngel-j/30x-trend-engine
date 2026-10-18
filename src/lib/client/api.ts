@@ -2,7 +2,7 @@
  * Llamadas del navegador a las API Routes. Sin dependencias de servidor:
  * este módulo solo importa tipos y constantes puras.
  */
-import type { FormatType, Network, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
+import type { FormatType, Network, RadarResult, SourceReport, TrendFilters, TrendSignal } from "@/types/trends";
 
 export class ApiError extends Error {
   constructor(
@@ -97,7 +97,7 @@ export interface AnalyzeUrlResponse {
   cached: boolean;
 }
 
-export const analyzeUrl = (body: { url: string; submitted_by?: string; text?: string; force?: boolean } | { id: string; force?: boolean }) =>
+export const analyzeUrl = (body: { url: string; text?: string; force?: boolean } | { id: string; force?: boolean }) =>
   request<AnalyzeUrlResponse>("/api/analyze-url", { method: "POST", body: JSON.stringify(body) });
 
 export type ExportTarget = "slack" | "notion" | "make";
@@ -157,3 +157,10 @@ export function storeOverrides(overrides: ExportOverrides): void {
 }
 
 export type { FormatType };
+
+// ── Radar semanal ──────────────────────────────────────────────────
+
+export const getLatestRadar = () => request<RadarResult>("/api/radar");
+
+export const runRadarNow = (body: { networks: Network[]; maxTopics?: number }) =>
+  request<RadarResult>("/api/radar", { method: "POST", body: JSON.stringify(body) });

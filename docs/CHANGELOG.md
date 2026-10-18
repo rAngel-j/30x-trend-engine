@@ -2,6 +2,28 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.0] — 2026-10-17 · Radar semanal y cero datos personales
+
+Alineación con el planteamiento del reto: el entregable pide **temas** que crecen **esta semana** (no piezas sueltas) y la restricción 08 exige **nada de datos personales**.
+
+### Añadido
+- **Radar semanal** (`POST | GET /api/radar`, `src/lib/radar.ts`): barre las semillas del ADN (ES + EN) con ventana de 14 días, agrupa piezas en temas con Gemini (`topic-clusterer.ts`, una llamada), mide esta semana frente a la anterior en código (`topic-growth.ts`), analiza la pieza más representativa de cada tema y guarda el Top 10 en `radar_runs` + `radar_topics`.
+- `RadarBoard`: primera pantalla de la app, "Los 10 temas de IA que más crecen esta semana", con filtro por etapa, motivo del crecimiento y la autopsia y los guiones de la pieza representativa.
+- Semillas editables en `docs/30X_BRAND_DNA.md` §7.
+- Migraciones `002_privacy.sql` y `003_radar.sql`; `src/lib/privacy.ts`.
+- Reintento ante límites por minuto de Gemini (429), sin reintentar si se agotó la cuota diaria.
+
+### Cambiado (privacidad)
+- Ya no se guardan `author_name`, `author_handle`, `author_url`, `thumbnail_url`, el ID de canal ni el nombre de quien envía al Sensor. Las bases SQLite existentes se limpian al abrirse.
+- Los títulos indexados pierden el prefijo con el nombre del autor y las menciones `@cuenta`.
+- A Gemini no se le envían nombres y se le pide no nombrar personas.
+- Tavily pasa a profundidad `basic` (solo snippets del índice, 1 crédito por búsqueda).
+
+### Verificado
+- Smoke test: crecimiento 8 vs. 2 → 97,5; limpieza de títulos; 8 semillas leídas del ADN; radar guardado y leído con su pieza representativa; base antigua sin columnas de identidad tras abrirse; radar sin Gemini → error claro.
+- Migraciones 001 → 002 → 003 en PostgreSQL 17 (PGlite): idempotentes, sin identidad, CHECKs, cascada y `representative_id` → null.
+- Navegador sobre base temporal con radar de muestra "[vista previa]" (borrada después): Top 10 como primera pantalla, tema expandido con su pieza, filtro por etapa, móvil a 375 px sin scroll horizontal; `POST /api/radar` sin fuentes → 503.
+
 ## [1.2.0] — 2026-10-17 · Auditoría de cumplimiento de reglas
 
 Revisión de cada fuente contra la regla del reto: contenido público sí; datos privados, contenido tras login y técnicas que dependan de violar términos de servicio, no.

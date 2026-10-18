@@ -4,14 +4,14 @@ import { Check, ChevronDown, Copy, ExternalLink, LoaderCircle, Send, Sparkles, T
 import { useState, type ReactNode } from "react";
 import type { ExportResult, ExportTarget } from "@/lib/client/api";
 import { compact, FORMAT_LABELS, NETWORK_LABELS, relativeDate, STAGE_INFO, VERDICT_LABELS } from "@/lib/client/labels";
-import { TREND_STAGES, type BrandAdaptations, type TrendSignal, type TrendStage } from "@/types/trends";
+import { TREND_STAGES, type BrandAdaptations, type StageEvidence, type TrendSignal, type TrendStage } from "@/types/trends";
 
 interface TrendCardProps {
   signal: TrendSignal;
   rank: number;
   expanded: boolean;
   onToggle: () => void;
-  onAnalyze: (signal: TrendSignal) => Promise<void>;
+  onAnalyze: (signal: TrendSignal) => Promise<unknown>;
   onExport: (signal: TrendSignal, target: ExportTarget) => Promise<ExportResult>;
 }
 
@@ -24,7 +24,7 @@ const STAGE_COLOR: Record<TrendStage, string> = {
   saturated: "bg-ceniza",
 };
 
-function StageMeter({ stage, rule }: { stage: TrendStage; rule: string }) {
+export function StageMeter({ stage, rule }: { stage: TrendStage; rule: string }) {
   const index = TREND_STAGES.indexOf(stage);
   const info = STAGE_INFO[stage];
   return (
@@ -42,8 +42,7 @@ function StageMeter({ stage, rule }: { stage: TrendStage; rule: string }) {
 }
 
 /** La evidencia de la etapa en lenguaje del equipo de contenido (la regla técnica queda en el tooltip). */
-function stageExplanation(signal: TrendSignal): string {
-  const e = signal.stage_evidence;
+export function stageExplanation(e: StageEvidence): string {
   const pct = (n: number) => `${Math.round(n * 100)} %`;
   if (e.cohort_size <= 1) return "Etapa provisional: es una pieza suelta, sin otras piezas del mismo tema para comparar.";
   const parts = [
@@ -268,7 +267,6 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
           <p className="line-clamp-2 font-semibold">{signal.title}</p>
           <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-tinta">
             <span>{NETWORK_LABELS[signal.network]}</span>
-            {signal.author_name && <span className="max-w-48 truncate">{signal.author_name}</span>}
             <span>{relativeDate(signal.published_at)}</span>
             {signal.format_type && <span>{FORMAT_LABELS[signal.format_type]}</span>}
           </p>
@@ -292,7 +290,7 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
         <div id={panelId} className="space-y-5 px-4 pb-5 sm:pl-20">
           <Section title="Por qué está en esta etapa">
             <p className="max-w-prose text-sm" title={signal.stage_evidence.rule}>
-              {STAGE_INFO[signal.stage].hint} <span className="text-tinta">{stageExplanation(signal)}</span>
+              {STAGE_INFO[signal.stage].hint} <span className="text-tinta">{stageExplanation(signal.stage_evidence)}</span>
             </p>
             <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
               {(
@@ -301,8 +299,8 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                   ["Reacciones", compact(m.likes)],
                   ["Comentarios", compact(m.comments)],
                   ["Vistas por hora", compact(signal.velocity_per_hour)],
-                  ["Seguidores del autor", compact(m.author_followers)],
-                  ["Promedio del autor", compact(m.author_avg_views)],
+                  ["Seguidores de la cuenta", compact(m.author_followers)],
+                  ["Promedio de la cuenta", compact(m.author_avg_views)],
                 ] as const
               )
                 .filter(([, v]) => v !== "—")

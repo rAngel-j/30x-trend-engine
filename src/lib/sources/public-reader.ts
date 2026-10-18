@@ -13,6 +13,7 @@ import { optionalEnv } from "@/lib/env";
 import { errorMessage, SourceError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
 import { assertPublicHttpUrl, detectNetwork, extractYouTubeId, instagramShortcodeToDate, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
+import { scrubIndexedTitle, scrubText } from "@/lib/privacy";
 import { extractEngagement, lookupIndexedUrl, type IndexedHit, type SocialNetwork } from "./social-serp";
 import { fetchYouTubeVideos } from "./youtube-outliers";
 import type { FormatHint, Network, RawSignal } from "@/types/trends";
@@ -36,12 +37,9 @@ export interface ReadOptions {
   text?: string;
 }
 
+/** Solo los campos que se usan. Los de autor y miniatura se ignoran a propósito (privacidad). */
 interface OEmbed {
   title?: string;
-  author_name?: string;
-  author_url?: string;
-  author_unique_id?: string;
-  thumbnail_url?: string;
   provider_name?: string;
 }
 
@@ -97,23 +95,11 @@ function formatHintFor(network: Network, url: string): FormatHint {
   return "article";
 }
 
-function handleFromUrl(network: Network, url: string): string | null {
-  const path = new URL(url).pathname;
-  if (network === "tiktok") return path.match(/\/@([\w.]+)/)?.[1] ?? null;
-  if (network === "linkedin") return path.match(/\/posts\/([^_/]+)_/)?.[1] ?? null;
-  if (network === "instagram") return path.match(/^\/([\w.]+)\/(?:p|reel|reels|tv)\//)?.[1] ?? null;
-  return null;
-}
-
-function cleanIndexedTitle(title: string): string {
-  return title.replace(/\s*[|•-]\s*(LinkedIn|Instagram|TikTok).*$/i, "").replace(/^(.+?)\s+(?:on|en)\s+(LinkedIn|Instagram):\s*/i, "").trim();
-}
-
 export async function readPublicUrl(input: string, options: ReadOptions = {}): Promise<PublicReading> {
   const url = assertPublicHttpUrl(input).toString();
   const network = detectNetwork(url);
   const closed = CLOSED_NETWORKS.includes(network);
-  const text = options.text?.trim().slice(0, MAX_COMMUNITY_TEXT) || null;
+  const text = options.text ? scrubText(options.text.slice(0, MAX_COMMUNITY_TEXT)) || null : null;
   const ytId = network === "youtube" ? extractYouTubeId(url) : null;
   const useYouTubeApi = Boolean(ytId && optionalEnv("YOUTUBE_API_KEY"));
   const providers: string[] = [];
@@ -165,21 +151,16 @@ export async function readPublicUrl(input: string, options: ReadOptions = {}): P
   const published =
     publishedFromUrl(network, url) ?? (jina?.publishedTime ? new Date(jina.publishedTime) : null) ?? (indexedDate && !Number.isNaN(indexedDate.getTime()) ? indexedDate : null);
   const engagement = extractEngagement(`${indexed?.title ?? ""} ${indexed?.content ?? ""} ${jina?.title ?? ""} ${jina?.description ?? ""} ${content.slice(0, 3000)}`);
-  const handle = oembed?.author_unique_id ?? handleFromUrl(network, url);
   const hours = published && !Number.isNaN(published.getTime()) ? Math.max((Date.now() - published.getTime()) / 3_600_000, 1) : null;
   const title =
-    (oembed?.title ?? jina?.title ?? (indexed ? cleanIndexedTitle(indexed.title) : "") ?? "").trim() || text?.split("\n")[0]?.slice(0, 160) || url;
+    scrubIndexedTitle(oembed?.title ?? jina?.title ?? indexed?.title ?? "") || text?.split("\n")[0]?.slice(0, 160) || url;
 
   const signal: RawSignal = {
     network,
     source: "community",
     url,
     title: title.slice(0, 300),
-    excerpt: (indexed?.content ?? jina?.description ?? content).slice(0, 800),
-    author_name: oembed?.author_name ?? null,
-    author_handle: handle,
-    author_url: oembed?.author_url ?? null,
-    thumbnail_url: oembed?.thumbnail_url ?? null,
+    excerpt: scrubText((indexed?.content ?? jina?.description ?? content).slice(0, 800)),
     published_at: hours !== null ? published!.toISOString() : null,
     language: null,
     format_hint: formatHintFor(network, url),

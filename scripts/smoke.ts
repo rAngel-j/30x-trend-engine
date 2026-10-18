@@ -17,6 +17,9 @@ import { optionalEnv } from "@/lib/env";
 import { errorMessage } from "@/lib/errors";
 import { enrichSignal } from "@/lib/intelligence/analyze";
 import { weightJev } from "@/lib/intelligence/jev-scorer";
+import { computeTopicGrowth, topicScore } from "@/lib/intelligence/topic-growth";
+import { scrubHandles, scrubIndexedTitle } from "@/lib/privacy";
+import { loadRadarSeeds, runRadar } from "@/lib/radar";
 import { classifyCohort, computePriority, detectLanguage } from "@/lib/intelligence/trend-stage";
 import { collectSignals, readPublicUrl } from "@/lib/sources";
 import { extractEngagement, parseCompactNumber } from "@/lib/sources/social-serp";
@@ -62,10 +65,33 @@ async function main() {
   assert.equal(weightJev({ business_impact: 90, practical_applicability: 80, executive_clarity: 70 }), 82);
   ok("ponderación JEV 0.40/0.35/0.25");
 
+  // Radar: crecimiento semanal determinista.
+  const day = 86_400_000;
+  const growthMembers = [
+    ...Array.from({ length: 8 }, (_, i) => ({ published_at: new Date(t0 - (i + 1) * 0.5 * day).toISOString() })),
+    ...Array.from({ length: 2 }, (_, i) => ({ published_at: new Date(t0 - (9 + i) * day).toISOString() })),
+    { published_at: null },
+  ];
+  const g = computeTopicGrowth(growthMembers, t0);
+  assert.deepEqual([g.this_week, g.last_week, g.growth_index, g.volume_index], [8, 2, 97.5, 80]);
+  assert.equal(computeTopicGrowth([{ published_at: new Date(t0 - day).toISOString() }, { published_at: new Date(t0 - 10 * day).toISOString() }], t0).growth_index, 50);
+  assert.equal(topicScore(g, 84), 90); // 0.5·97.5 + 0.2·80 + 0.3·84 = 89.95
+  ok(`crecimiento por tema: 8 esta semana vs 2 la anterior → ${g.growth_index}/100; puntaje con JEV 84 → ${topicScore(g, 84)}`);
+
+  // Privacidad: sin nombres ni handles en títulos indexados.
+  assert.equal(scrubIndexedTitle("Ana Pérez en LinkedIn: Cómo usamos agentes de IA | 12 comments"), "Cómo usamos agentes de IA");
+  assert.equal(scrubIndexedTitle("Juan (@juan.ia) • Instagram reel"), "");
+  assert.equal(scrubHandles("Gracias @maria_ventas por la idea"), "Gracias @cuenta por la idea");
+  ok("privacidad: se quitan nombres de autor y menciones de títulos y textos");
+
+  const seeds = await loadRadarSeeds();
+  assert.ok(seeds.length >= 2 && seeds.some((x) => /AI/.test(x)) && seeds.some((x) => /IA/.test(x)));
+  ok(`semillas del radar desde el ADN: ${seeds.length} (español + inglés)`);
+
   // Cohortes sintéticas SOLO para verificar las reglas de etapa (no se persisten en la base real).
   const base = (i: number, title: string, hoursAgo: number, outlier: number | null): RawSignal => ({
     network: "youtube", source: "youtube_api", url: `https://www.youtube.com/watch?v=test${String(i).padStart(7, "0")}`,
-    title, excerpt: "", author_name: null, author_handle: null, author_url: null, thumbnail_url: null,
+    title, excerpt: "",
     published_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(), language: null, format_hint: "long_video",
     metrics: { views: 1000, likes: null, comments: null, shares: null, author_followers: null, author_avg_views: null, duration_seconds: null },
     outlier_score: outlier, velocity_per_hour: 10, author_weight: null, query: "smoke-test", raw: {},
@@ -132,9 +158,52 @@ async function main() {
     assert.equal(purged, 1);
     assert.equal((await repo.querySignals({})).total, 5);
     ok("retención: borra datos de YouTube no refrescados en 30 días");
+
+    // Radar: guardar y leer una corrida con su pieza representativa.
+    const remaining = (await repo.querySignals({})).items;
+    const saved = await repo.saveRadar(
+      { networks: ["youtube"], seeds: ["s1"], signals_found: remaining.length, sources: [], notes: [], took_ms: 1 },
+      [{
+        rank: 1, label: "Tema de prueba", thesis: "Tesis", this_week: 3, last_week: 1, growth_index: 80, volume_index: 30, score: 70,
+        stage: "emerging", stage_score: 70, stage_evidence: remaining[0]!.stage_evidence, jev_score: 91, networks: ["youtube"],
+        representative_id: remaining[0]!.id, member_ids: remaining.map((r) => r.id),
+      }],
+    );
+    const latest = await repo.getRadar();
+    assert.equal(latest?.run.id, saved.run.id);
+    assert.equal(latest?.topics[0]?.representative?.id, remaining[0]!.id);
+    ok("radar: corrida y temas guardados con su pieza representativa");
   } finally {
     await repo.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+
+  const legacyDir = mkdtempSync(join(tmpdir(), "30x-legacy-"));
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const legacyPath = join(legacyDir, "trends.db");
+    const old = new DatabaseSync(legacyPath);
+    old.exec(`CREATE TABLE trend_signals (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL UNIQUE, network TEXT NOT NULL, source TEXT NOT NULL,
+      url TEXT NOT NULL, query TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', excerpt TEXT NOT NULL DEFAULT '',
+      author_name TEXT, author_handle TEXT, author_url TEXT, thumbnail_url TEXT, language TEXT, format_hint TEXT NOT NULL DEFAULT 'unknown',
+      published_at TEXT, metrics TEXT NOT NULL DEFAULT '{}', outlier_score REAL, velocity_per_hour REAL, author_weight REAL,
+      stage TEXT NOT NULL, stage_score INTEGER NOT NULL, stage_evidence TEXT NOT NULL DEFAULT '{}', format_type TEXT, jev_score INTEGER,
+      priority_score REAL NOT NULL DEFAULT 0, analysis TEXT, analysis_status TEXT NOT NULL DEFAULT 'pending', analysis_error TEXT,
+      raw TEXT NOT NULL DEFAULT '{}', discovered_at TEXT NOT NULL, last_seen_at TEXT NOT NULL)`);
+    old.prepare("INSERT INTO trend_signals (id, fingerprint, network, source, url, query, author_name, author_handle, stage, stage_score, raw, discovered_at, last_seen_at) VALUES ('x','fp','linkedin','tavily','https://linkedin.com/posts/a','q','Ana Pérez','ana','peaking',50,?, '2026-01-01','2026-01-01')")
+      .run(JSON.stringify({ submitted_by: "maria", channel_id: "UC123", provider: "tavily" }));
+    old.close();
+    const migrated = createSqliteRepository(legacyPath);
+    const row = await migrated.getSignal("x");
+    await migrated.close();
+    const check = new DatabaseSync(legacyPath);
+    const cols = (check.prepare("PRAGMA table_info(trend_signals)").all() as { name: string }[]).map((c) => c.name);
+    check.close();
+    assert.ok(!cols.some((c) => ["author_name", "author_handle", "author_url", "thumbnail_url"].includes(c)));
+    assert.deepEqual(row?.raw, { provider: "tavily" });
+    ok("privacidad: una base antigua pierde las columnas de identidad y los IDs al abrirse");
+  } finally {
+    rmSync(legacyDir, { recursive: true, force: true });
   }
 
   console.log("\n3) Fuentes reales");
@@ -169,6 +238,13 @@ async function main() {
   assert.ok(withText.providers.includes("community_text") && !withText.providers.includes("jina"));
   assert.equal(withText.signal.published_at?.slice(0, 4), "2024");
   ok("LinkedIn: sin descargar la página; usa índice, oEmbed o el texto aportado por la persona");
+
+  if (!optionalEnv("GEMINI_API_KEY")) {
+    const tmpRepo = createSqliteRepository(join(tmpdir(), `30x-radar-${Date.now()}.db`));
+    await assert.rejects(runRadar(tmpRepo, { networks: ["youtube"], maxTopics: 10 }), /GEMINI_API_KEY/);
+    await tmpRepo.close();
+    ok("radar: sin GEMINI_API_KEY responde con error claro (agrupar temas requiere IA)");
+  }
 
   console.log("\n5) Motor JEV en Gemini");
   if (!optionalEnv("GEMINI_API_KEY")) {

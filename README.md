@@ -25,18 +25,19 @@ Es **el hueco, no el taladro**: el equipo no recibe un dashboard para interpreta
 |---|---|
 | **¿Qué está despegando y en qué etapa?** | Outlier Score (cuántas veces superó el promedio de su propio canal), velocidad, peso del autor y etapa 🌱 emergente · 🚀 despegando · 🔥 saturada, con las cifras que la justifican. |
 | **¿Por qué funcionó?** | Autopsia de 5 variables: **Gancho, Formato, Tema, Momento y Autor vs. contenido**. |
+| **Entregable: "¿cuáles son los 10 temas de IA que más crecen esta semana, por qué y cómo lo adaptamos?"** | El **Radar semanal** responde exactamente eso: agrupa las piezas en temas, mide cuántas salieron esta semana frente a la anterior y entrega el Top 10 con la autopsia y los guiones de la pieza que mejor representa cada tema. |
 | **¿Le sirve a 30X y cómo lo adapto?** | Score JEV 0-100 para ejecutivos LatAm, Reel por segundos para @andresbilbao, carrusel por slides para @30x y ángulo contrarian obligatorio si el tema ya está saturado. |
 
 ---
 
 ## Recorrido de 2 minutos
 
-1. **Busca un tema**: "¿Qué está despegando sobre *agentes de IA para ventas*?" en YouTube, LinkedIn, Instagram y TikTok, últimos 7 días.
-2. El motor busca **en vivo y también en inglés**, guarda todo y analiza las 5 piezas con más potencial.
-3. **Filtra** el ranking: solo 🌱 emergentes, JEV ≥ 70, outlier ×5+, formato carrusel. La URL guarda los filtros para compartir la vista.
-4. **Abre una pieza**: por qué está en esa etapa, las 5 variables, la Matriz JEV con sus pesos y el guion listo para copiar.
-5. **Envíala** a Slack, Notion o Make con un clic.
-6. ¿Alguien del equipo vio algo funcionando? Lo pega en el **Sensor de Comunidad** y recibe la misma autopsia.
+1. Abre la app: la primera pantalla es **"Los 10 temas de IA que más crecen esta semana"**. Elige las redes (por ejemplo, solo LinkedIn) y pulsa **Actualizar radar** (2 a 4 minutos).
+2. Cada tema muestra cuántas piezas salieron **esta semana frente a la anterior**, su etapa 🌱🚀🔥 y su JEV. Filtra por etapa para quedarte con los emergentes.
+3. **Abre un tema**: por qué está creciendo, y la pieza que mejor lo representa con sus 5 variables, la Matriz JEV y el Reel y el carrusel listos para grabar.
+4. **Envíalo** a Slack, Notion o Make con un clic.
+5. ¿Tienes un tema concreto? Más abajo, "¿Qué está despegando sobre ___?" lo explora pieza por pieza, con filtros por red, etapa, JEV, outlier y formato.
+6. ¿Alguien del equipo vio algo funcionando? Lo pega en el **Sensor de Comunidad**, con el texto si es de LinkedIn, Instagram o TikTok, y recibe la misma autopsia.
 
 ---
 
@@ -52,6 +53,8 @@ Es **el hueco, no el taladro**: el equipo no recibe un dashboard para interpreta
 | **Google Gemini 2.5 Flash** | Autopsia, JEV y guiones | Solo Structured Outputs validados |
 
 **Nunca se usan** logins, cookies, cuentas de terceros, datos privados ni descargas de páginas de LinkedIn, Instagram o TikTok, ni directas ni a través de lectores o proxies de terceros: que lo haga otro servicio no lo vuelve legítimo. Cuando una red no expone una métrica de forma legal, el motor la deja vacía en lugar de inventarla.
+
+**Nada de datos personales:** el motor analiza piezas, no personas. No guarda nombres, handles, perfiles ni miniaturas de autores, ni el nombre de quien envía un enlace. "Autor vs. contenido" se resuelve con cifras (seguidores, promedio, Outlier) sin identidad, y a Gemini no se le envía ningún nombre. Solo se conserva la URL pública de la pieza, necesaria para citarla.
 
 **Políticas de YouTube API:** los datos de YouTube se borran si no se refrescan en 30 días, la interfaz atribuye los datos a YouTube y enlaza sus Términos y la Política de privacidad de Google, y las métricas propias (Outlier, velocidad, etapa, JEV) se presentan como cálculos de 30X, no como métricas de YouTube.
 
@@ -99,6 +102,27 @@ JEV = 0.40 · impacto en negocio + 0.35 · aplicabilidad sin un equipo de 20 ing
 ```
 
 **Prioridad del Top 10**: `0.5 · JEV + 0.3 · outlier normalizado + 0.2 · peso de la etapa` (despegando 100, emergente 80, saturada 30).
+
+### Radar semanal: cómo se mide el crecimiento
+
+Cada semilla (pares español + inglés en el ADN de marca) se busca con una ventana de **14 días**. Como la fecha de cada pieza es exacta, una sola búsqueda alcanza para contar **esta semana frente a la anterior**. Gemini agrupa las piezas en temas concretos en una sola llamada, y el código mide cada tema:
+
+```
+crecimiento = 50 + 30 · log2((piezas esta semana + 1) / (piezas semana anterior + 1))     (0-100; 50 = estable)
+puntaje     = 0.5 · crecimiento + 0.2 · volumen + 0.3 · JEV de su pieza más representativa
+```
+
+Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de ≈ 97. Si no cambia, se queda en 50.
+
+### Cuánto cuesta (y por qué no es una fortuna)
+
+| Por corrida del Radar (4 redes, 8 semillas) | Consumo | Plan gratuito |
+|---|---|---|
+| YouTube Data API | ≈ 816 unidades | 10.000 al día |
+| Tavily (profundidad `basic`) | ≈ 24 créditos | créditos mensuales gratuitos |
+| Gemini 2.5 Flash | ≈ 25-30 llamadas (1 de agrupación + 2-3 por tema) | cubierto por el plan gratuito |
+
+Las piezas ya analizadas no se vuelven a pagar. Frente a los servicios de scraping de miles de dólares al año, el costo operativo de una corrida semanal cabe en los planes gratuitos.
 
 ### El ADN de marca es configuración, no código
 
@@ -174,6 +198,8 @@ npm run check
 
 | Endpoint | Para qué |
 |---|---|
+| `POST /api/radar` | Ejecuta el Radar semanal: Top 10 de temas que más crecen, con porqué y adaptación |
+| `GET /api/radar` | Último radar guardado (o `?run=<id>`) |
 | `POST /api/discover` | Busca en vivo (con variante en el otro idioma), guarda y analiza el Top N |
 | `GET /api/discover` | Filtra lo guardado: red, etapa, formato, idioma, estado, ventana, JEV, outlier, texto y orden |
 | `POST /api/analyze-url` | Sensor de Comunidad (`url`) o re-análisis de una pieza guardada (`id`) |
@@ -196,12 +222,12 @@ Contratos completos, ejemplos de respuesta y códigos de error: [`docs/API_CONTR
 | TypeScript estricto (`strict` + `noUncheckedIndexedAccess`) | Sin errores |
 | `next build` de producción | Sin errores ni avisos |
 | `npm audit` | 0 vulnerabilidades |
-| Prueba de humo (`npm run smoke`) | Fórmulas, fechas desde IDs, etapas, filtros SQLite, payloads de Slack y Notion, anti-SSRF y degradación sin claves |
-| Migración SQL | Aplicada en PostgreSQL 17 real (PGlite): idempotente, CHECKs, upsert que preserva análisis, búsqueda de texto y uso de índices |
+| Prueba de humo (`npm run smoke`) | Crecimiento semanal por tema, privacidad (incluida la limpieza de bases antiguas), persistencia del radar, fórmulas, fechas desde IDs, etapas, filtros SQLite, payloads de Slack y Notion, anti-SSRF y degradación sin claves |
+| Migraciones SQL (001-003) | Aplicadas en secuencia en PostgreSQL 17 real (PGlite): idempotentes, sin columnas de identidad tras 002, radar con CHECKs, cascada y `representative_id` → null al purgar, CHECKs, upsert que preserva análisis, búsqueda de texto y uso de índices |
 | Endpoints en vivo | Códigos 200 / 400 / 401 / 404 / 503 según contrato, deduplicación de URLs, webhook real a Slack |
 | Interfaz | Revisada en navegador, de escritorio a 375 px sin scroll horizontal; foco visible y `prefers-reduced-motion` |
 
-**Pendiente de validar con claves reales**: ingesta de YouTube y Tavily, análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
+**Pendiente de validar con claves reales**: una corrida real del Radar semanal, ingesta de YouTube y Tavily, análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
 
 ### Límites conocidos (y cómo se manejan)
 
@@ -224,7 +250,9 @@ src/
 ├── components/                   ControlBar · TrendCard · CommunitySensor · PlugAndPlayConfig
 ├── lib/
 │   ├── sources/                  youtube-outliers · social-serp · public-reader
-│   ├── intelligence/             trend-stage · forensic-5d · jev-scorer · bilbao-adapter · query-expander
+│   ├── radar.ts                  Radar semanal (semillas → temas → crecimiento → análisis)
+│   ├── privacy.ts                Minimización de datos personales
+│   ├── intelligence/             trend-stage · topic-clusterer · topic-growth · forensic-5d · jev-scorer · bilbao-adapter · query-expander
 │   ├── export/                   slack · notion · make
 │   └── db/supabase.ts            Supabase o SQLite con la misma interfaz
 └── types/trends.ts               Contratos estrictos

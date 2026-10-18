@@ -6,6 +6,7 @@ import { optionalEnv } from "@/lib/env";
 import { errorMessage, MissingCredentialError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
 import { normalizeLanguageCode } from "@/lib/intelligence/trend-stage";
+import { scrubHandles } from "@/lib/privacy";
 import type { DiscoveryRequest, RawSignal, SourceReport } from "@/types/trends";
 
 const API = "https://www.googleapis.com/youtube/v3";
@@ -117,19 +118,13 @@ function toSignal(video: VideoItem, channel: ChannelItem | undefined, query: str
     channelVideos: int(channel?.statistics?.videoCount),
     publishedAt: video.snippet.publishedAt,
   });
-  const handle = channel?.snippet?.customUrl ?? null;
-  const thumbs = video.snippet.thumbnails ?? {};
 
   return {
     network: "youtube",
     source: "youtube_api",
     url: isShort ? `https://www.youtube.com/shorts/${video.id}` : `https://www.youtube.com/watch?v=${video.id}`,
-    title: video.snippet.title,
-    excerpt: video.snippet.description.slice(0, 600),
-    author_name: video.snippet.channelTitle,
-    author_handle: handle,
-    author_url: handle ? `https://www.youtube.com/${handle}` : `https://www.youtube.com/channel/${video.snippet.channelId}`,
-    thumbnail_url: (thumbs.high ?? thumbs.medium ?? thumbs.default)?.url ?? null,
+    title: scrubHandles(video.snippet.title),
+    excerpt: scrubHandles(video.snippet.description.slice(0, 600)),
     published_at: video.snippet.publishedAt,
     language: normalizeLanguageCode(video.snippet.defaultAudioLanguage ?? video.snippet.defaultLanguage),
     format_hint: isShort ? "short_vertical" : "long_video",
@@ -148,7 +143,6 @@ function toSignal(video: VideoItem, channel: ChannelItem | undefined, query: str
     query,
     raw: {
       video_id: video.id,
-      channel_id: video.snippet.channelId,
       tags: video.snippet.tags?.slice(0, 15) ?? [],
       subs_ratio: views !== null && subs ? Math.round((views / subs) * 100) / 100 : null,
       channel_video_count: int(channel?.statistics?.videoCount),

@@ -2,7 +2,8 @@
  * Persistencia de señales con filtros dinámicos.
  * - Supabase (Postgres) si existen SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
  * - SQLite nativo (node:sqlite) como fallback automático para que nunca falle en local.
- * Esquema Postgres: supabase/migrations/001_trend_signals.sql (SQLITE_SCHEMA es su espejo).
+ * Esquema Postgres: supabase/migrations/001-003 (SQLITE_SCHEMA es su espejo).
+ * Privacidad: no se guardan datos de identidad de autores (docs/ARCHITECTURE.md §7b-ter).
  */
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
@@ -13,6 +14,9 @@ import { optionalEnv } from "@/lib/env";
 import { computePriority } from "@/lib/intelligence/trend-stage";
 import { fingerprintUrl } from "@/lib/url";
 import type {
+  RadarResult,
+  RadarRun,
+  RadarTopic,
   SortKey,
   SourceReport,
   StagedSignal,
@@ -31,6 +35,9 @@ export interface DiscoveryRunLog {
   startedAt: string;
 }
 
+export type NewRadarRun = Omit<RadarRun, "id" | "created_at">;
+export type NewRadarTopic = Omit<RadarTopic, "id" | "run_id" | "representative">;
+
 export interface TrendRepository {
   readonly kind: "supabase" | "sqlite";
   upsertSignals(signals: StagedSignal[]): Promise<TrendSignal[]>;
@@ -38,10 +45,15 @@ export interface TrendRepository {
   markAnalysisFailed(id: string, error: string): Promise<void>;
   getSignal(id: string): Promise<TrendSignal | null>;
   getSignalByUrl(url: string): Promise<TrendSignal | null>;
+  getSignalsByIds(ids: string[]): Promise<TrendSignal[]>;
   querySignals(filters: TrendFilters): Promise<TrendPage>;
   logDiscoveryRun(run: DiscoveryRunLog): Promise<void>;
   /** Borra señales de YouTube no refrescadas en `days` días (políticas de la YouTube API). Devuelve cuántas borró. */
   purgeExpiredYouTube(days?: number): Promise<number>;
+  /** Guarda una corrida del Radar semanal con sus temas. */
+  saveRadar(run: NewRadarRun, topics: NewRadarTopic[]): Promise<RadarResult>;
+  /** Corrida concreta o la más reciente, con la pieza representativa de cada tema. */
+  getRadar(runId?: string): Promise<RadarResult | null>;
   /** Libera conexiones (SQLite mantiene el archivo abierto). */
   close(): Promise<void>;
 }
@@ -63,7 +75,7 @@ const MAX_LIMIT = 100;
 
 const LIST_COLUMNS = [
   "id", "fingerprint", "network", "source", "url", "query", "title", "excerpt",
-  "author_name", "author_handle", "author_url", "thumbnail_url", "language", "format_hint",
+  "language", "format_hint",
   "published_at", "metrics", "outlier_score", "velocity_per_hour", "author_weight",
   "stage", "stage_score", "stage_evidence", "format_type", "jev_score", "priority_score",
   "analysis", "analysis_status", "analysis_error", "raw", "discovered_at", "last_seen_at",
@@ -79,10 +91,6 @@ function ingestRow(signal: StagedSignal, priority: number) {
     query: signal.query,
     title: signal.title,
     excerpt: signal.excerpt,
-    author_name: signal.author_name,
-    author_handle: signal.author_handle,
-    author_url: signal.author_url,
-    thumbnail_url: signal.thumbnail_url,
     language: signal.language,
     format_hint: signal.format_hint,
     published_at: signal.published_at ? new Date(signal.published_at).toISOString() : null,
@@ -125,10 +133,6 @@ function rowToSignal(row: Record<string, unknown>): TrendSignal {
     query: String(row.query),
     title: String(row.title ?? ""),
     excerpt: String(row.excerpt ?? ""),
-    author_name: (row.author_name as string | null) ?? null,
-    author_handle: (row.author_handle as string | null) ?? null,
-    author_url: (row.author_url as string | null) ?? null,
-    thumbnail_url: (row.thumbnail_url as string | null) ?? null,
     language: (row.language as TrendSignal["language"]) ?? null,
     format_hint: row.format_hint as TrendSignal["format_hint"],
     published_at: (row.published_at as string | null) ?? null,
@@ -149,6 +153,46 @@ function rowToSignal(row: Record<string, unknown>): TrendSignal {
     discovered_at: String(row.discovered_at),
     last_seen_at: String(row.last_seen_at),
   };
+}
+
+function rowToRadarRun(row: Record<string, unknown>): RadarRun {
+  return {
+    id: String(row.id),
+    created_at: String(row.created_at),
+    networks: parseJson(row.networks, []),
+    seeds: parseJson(row.seeds, []),
+    signals_found: toNumber(row.signals_found) ?? 0,
+    sources: parseJson(row.sources, []),
+    notes: parseJson(row.notes, []),
+    took_ms: toNumber(row.took_ms) ?? 0,
+  };
+}
+
+function rowToRadarTopic(row: Record<string, unknown>): RadarTopic {
+  return {
+    id: String(row.id),
+    run_id: String(row.run_id),
+    rank: toNumber(row.rank) ?? 0,
+    label: String(row.label),
+    thesis: String(row.thesis ?? ""),
+    this_week: toNumber(row.this_week) ?? 0,
+    last_week: toNumber(row.last_week) ?? 0,
+    growth_index: toNumber(row.growth_index) ?? 0,
+    volume_index: toNumber(row.volume_index) ?? 0,
+    score: toNumber(row.score) ?? 0,
+    stage: row.stage as RadarTopic["stage"],
+    stage_score: toNumber(row.stage_score) ?? 0,
+    stage_evidence: parseJson(row.stage_evidence, {} as RadarTopic["stage_evidence"]),
+    jev_score: toNumber(row.jev_score),
+    networks: parseJson(row.networks, []),
+    representative_id: (row.representative_id as string | null) ?? null,
+    member_ids: parseJson(row.member_ids, []),
+  };
+}
+
+function attachRepresentatives(topics: RadarTopic[], signals: TrendSignal[]): RadarTopic[] {
+  const byId = new Map(signals.map((s) => [s.id, s]));
+  return topics.map((t) => ({ ...t, representative: t.representative_id ? byId.get(t.representative_id) ?? null : null }));
 }
 
 function clampLimit(limit?: number): number {
@@ -279,6 +323,37 @@ class SupabaseTrendRepository implements TrendRepository {
     return count ?? 0;
   }
 
+  async getSignalsByIds(ids: string[]): Promise<TrendSignal[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await this.client.from("trend_signals").select(LIST_COLUMNS.join(",")).in("id", ids);
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    return (data as unknown as Record<string, unknown>[]).map(rowToSignal);
+  }
+
+  async saveRadar(run: NewRadarRun, topics: NewRadarTopic[]): Promise<RadarResult> {
+    const { data: runRow, error } = await this.client.from("radar_runs").insert(run).select("*").single();
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    const runId = String((runRow as Record<string, unknown>).id);
+    if (topics.length) {
+      const { error: topicError } = await this.client.from("radar_topics").insert(topics.map((t) => ({ ...t, run_id: runId })));
+      if (topicError) throw new Error(`Supabase: ${topicError.message}`);
+    }
+    return (await this.getRadar(runId))!;
+  }
+
+  async getRadar(runId?: string): Promise<RadarResult | null> {
+    const base = this.client.from("radar_runs").select("*");
+    const { data: runs, error } = await (runId ? base.eq("id", runId) : base.order("created_at", { ascending: false }).limit(1));
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    const runRow = (runs as Record<string, unknown>[] | null)?.[0];
+    if (!runRow) return null;
+    const { data: topicRows, error: topicError } = await this.client.from("radar_topics").select("*").eq("run_id", runRow.id).order("rank");
+    if (topicError) throw new Error(`Supabase: ${topicError.message}`);
+    const topics = (topicRows as Record<string, unknown>[]).map(rowToRadarTopic);
+    const reps = await this.getSignalsByIds(topics.map((t) => t.representative_id).filter((id): id is string => Boolean(id)));
+    return { run: rowToRadarRun(runRow), topics: attachRepresentatives(topics, reps) };
+  }
+
   async close(): Promise<void> {}
 }
 
@@ -294,7 +369,6 @@ CREATE TABLE IF NOT EXISTS trend_signals (
   query TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
   excerpt TEXT NOT NULL DEFAULT '',
-  author_name TEXT, author_handle TEXT, author_url TEXT, thumbnail_url TEXT,
   language TEXT CHECK (language IN ('es','en','pt','other')),
   format_hint TEXT NOT NULL DEFAULT 'unknown',
   published_at TEXT,
@@ -336,11 +410,48 @@ CREATE TABLE IF NOT EXISTS discovery_runs (
   started_at TEXT NOT NULL,
   finished_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS radar_runs (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  networks TEXT NOT NULL,
+  seeds TEXT NOT NULL,
+  signals_found INTEGER NOT NULL DEFAULT 0,
+  sources TEXT NOT NULL DEFAULT '[]',
+  notes TEXT NOT NULL DEFAULT '[]',
+  took_ms INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS rr_created ON radar_runs (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS radar_topics (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES radar_runs(id) ON DELETE CASCADE,
+  rank INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  thesis TEXT NOT NULL DEFAULT '',
+  this_week INTEGER NOT NULL,
+  last_week INTEGER NOT NULL,
+  growth_index REAL NOT NULL,
+  volume_index REAL NOT NULL,
+  score REAL NOT NULL,
+  stage TEXT NOT NULL CHECK (stage IN ('emerging','peaking','saturated')),
+  stage_score INTEGER NOT NULL,
+  stage_evidence TEXT NOT NULL DEFAULT '{}',
+  jev_score INTEGER,
+  networks TEXT NOT NULL DEFAULT '[]',
+  representative_id TEXT,
+  member_ids TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS rt_run_rank ON radar_topics (run_id, rank);
 `;
+
+/** Columnas de identidad de versiones anteriores: se eliminan al abrir una base existente (privacidad). */
+const LEGACY_IDENTITY_COLUMNS = ["author_name", "author_handle", "author_url", "thumbnail_url"];
+
 
 const INGEST_COLUMNS = [
   "fingerprint", "network", "source", "url", "query", "title", "excerpt",
-  "author_name", "author_handle", "author_url", "thumbnail_url", "language", "format_hint",
+  "language", "format_hint",
   "published_at", "metrics", "outlier_score", "velocity_per_hour", "author_weight",
   "stage", "stage_score", "stage_evidence", "priority_score", "raw", "last_seen_at",
 ] as const;
@@ -367,7 +478,15 @@ class SqliteTrendRepository implements TrendRepository {
       const db = new DatabaseSync(this.path);
       db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
       db.exec(SQLITE_SCHEMA);
+      // Privacidad: bases creadas con versiones anteriores pierden las columnas de identidad y los IDs en `raw`.
+      const columns = new Set((db.prepare("PRAGMA table_info(trend_signals)").all() as { name: string }[]).map((c) => c.name));
+      for (const col of LEGACY_IDENTITY_COLUMNS) if (columns.has(col)) db.exec(`ALTER TABLE trend_signals DROP COLUMN ${col}`);
+      db.exec(
+        "UPDATE trend_signals SET raw = json_remove(raw, '$.submitted_by', '$.channel_id') " +
+          "WHERE json_extract(raw, '$.submitted_by') IS NOT NULL OR json_extract(raw, '$.channel_id') IS NOT NULL",
+      );
       return db;
+
     })();
     return this.dbPromise;
   }
@@ -497,6 +616,51 @@ class SqliteTrendRepository implements TrendRepository {
     const db = await this.db();
     const res = db.prepare("DELETE FROM trend_signals WHERE network = 'youtube' AND last_seen_at < ?").run(sinceIso(days));
     return Number(res.changes);
+  }
+
+  async getSignalsByIds(ids: string[]): Promise<TrendSignal[]> {
+    if (ids.length === 0) return [];
+    const db = await this.db();
+    const rows = db.prepare(`SELECT * FROM trend_signals WHERE id IN (${ids.map(() => "?").join(", ")})`).all(...ids) as Record<string, unknown>[];
+    return rows.map(rowToSignal);
+  }
+
+  async saveRadar(run: NewRadarRun, topics: NewRadarTopic[]): Promise<RadarResult> {
+    const db = await this.db();
+    const runId = randomUUID();
+    db.exec("BEGIN");
+    try {
+      db.prepare(
+        "INSERT INTO radar_runs (id, created_at, networks, seeds, signals_found, sources, notes, took_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(runId, new Date().toISOString(), JSON.stringify(run.networks), JSON.stringify(run.seeds), run.signals_found, JSON.stringify(run.sources), JSON.stringify(run.notes), run.took_ms);
+      const insert = db.prepare(
+        `INSERT INTO radar_topics (id, run_id, rank, label, thesis, this_week, last_week, growth_index, volume_index, score, stage, stage_score, stage_evidence, jev_score, networks, representative_id, member_ids)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const t of topics) {
+        insert.run(
+          randomUUID(), runId, t.rank, t.label, t.thesis, t.this_week, t.last_week, t.growth_index, t.volume_index, t.score, t.stage, t.stage_score,
+          JSON.stringify(t.stage_evidence), t.jev_score, JSON.stringify(t.networks), t.representative_id, JSON.stringify(t.member_ids),
+        );
+      }
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+    return (await this.getRadar(runId))!;
+  }
+
+  async getRadar(runId?: string): Promise<RadarResult | null> {
+    const db = await this.db();
+    const runRow = (runId
+      ? db.prepare("SELECT * FROM radar_runs WHERE id = ?").get(runId)
+      : db.prepare("SELECT * FROM radar_runs ORDER BY created_at DESC LIMIT 1").get()) as Record<string, unknown> | undefined;
+    if (!runRow) return null;
+    const topicRows = db.prepare("SELECT * FROM radar_topics WHERE run_id = ? ORDER BY rank").all(String(runRow.id)) as Record<string, unknown>[];
+    const topics = topicRows.map(rowToRadarTopic);
+    const reps = await this.getSignalsByIds(topics.map((t) => t.representative_id).filter((id): id is string => Boolean(id)));
+    return { run: rowToRadarRun(runRow), topics: attachRepresentatives(topics, reps) };
   }
 
   async close(): Promise<void> {

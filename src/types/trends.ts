@@ -46,7 +46,7 @@ export interface SignalMetrics {
   likes: number | null;
   comments: number | null;
   shares: number | null;
-  /** Suscriptores / seguidores del autor (si la fuente lo expone). */
+  /** Seguidores de la cuenta (cifra agregada, sin identidad). */
   author_followers: number | null;
   /** Promedio histórico de vistas por pieza del autor (YouTube). */
   author_avg_views: number | null;
@@ -60,10 +60,7 @@ export interface RawSignal {
   url: string;
   title: string;
   excerpt: string;
-  author_name: string | null;
-  author_handle: string | null;
-  author_url: string | null;
-  thumbnail_url: string | null;
+  // Sin datos personales (restricción 08): no hay nombre, handle, perfil ni miniatura del autor.
   published_at: string | null; // ISO-8601
   language: Language | null;
   format_hint: FormatHint;
@@ -223,4 +220,46 @@ export interface TrendFilters {
 export interface TrendPage {
   items: TrendSignal[];
   total: number;
+}
+
+// ── Radar semanal (docs/ARCHITECTURE.md §7b-quater) ─────────────────
+
+export interface RadarRun {
+  id: string;
+  created_at: string;
+  networks: Network[];
+  seeds: string[];
+  signals_found: number;
+  sources: SourceReport[];
+  notes: string[];
+  took_ms: number;
+}
+
+export interface RadarTopic {
+  id: string;
+  run_id: string;
+  rank: number;
+  label: string;
+  thesis: string;
+  this_week: number;
+  last_week: number;
+  /** 50 = estable; > 50 crece; < 50 decrece. */
+  growth_index: number;
+  volume_index: number;
+  score: number;
+  stage: TrendStage;
+  stage_score: number;
+  stage_evidence: StageEvidence;
+  /** JEV de la pieza más representativa del tema. */
+  jev_score: number | null;
+  networks: Network[];
+  representative_id: string | null;
+  member_ids: string[];
+  /** Se adjunta al leer: la pieza representativa con su análisis. */
+  representative?: TrendSignal | null;
+}
+
+export interface RadarResult {
+  run: RadarRun;
+  topics: RadarTopic[];
 }

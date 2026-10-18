@@ -2,6 +2,15 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.5.1] — 2026-10-18 · Pitch de 5 minutos
+
+### Añadido
+- **Diapositivas del pitch** en `docs/pitch/30X-Radar-pitch.pptx`: 8 diapositivas en modo oscuro con la paleta 30X, capturas reales de la app y notas del orador con tiempos. Siguen `docs/DEMO.md` y llevan marcado el criterio de evaluación que cubre cada una (impacto, innovación, viabilidad técnica, viabilidad de implementación).
+
+### Corregido
+- Doble punto en "Gancho" y "Formato" de la autopsia cuando la IA ya cerraba la frase.
+- Cabecera de `docs/30X_BRAND_DNA.md`: el ADN ahora vive en el perfil y se edita desde la app.
+
 ## [1.5.0] — 2026-10-18 · Perfiles de marca, modo oscuro y preparación de la demo
 
 ### Añadido

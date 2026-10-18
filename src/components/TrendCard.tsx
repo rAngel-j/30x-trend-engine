@@ -19,6 +19,9 @@ interface TrendCardProps {
   inTopic?: boolean;
 }
 
+/** Cierra una frase con punto solo si no termina ya en signo de puntuación. */
+const sentence = (text: string) => (/[.!?…:]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
 /** Solo enlaces http(s): nunca `javascript:` u otros esquemas llegados de fuentes externas. */
 const safeHref = (url: string) => (/^https?:\/\//i.test(url) ? url : undefined);
 
@@ -347,8 +350,8 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
                 <dl className="grid gap-4 md:grid-cols-[8rem_1fr]">
                   {(
                     [
-                      ["Gancho", <>“{a.forensic.hook_analysis.hook_text}” <span className="text-tinta">— {a.forensic.hook_analysis.mechanism}. {a.forensic.hook_analysis.why_it_works}</span></>],
-                      ["Formato", <>{FORMAT_LABELS[a.forensic.format_type.label]}. <span className="text-tinta">{a.forensic.format_type.description}</span></>],
+                      ["Gancho", <>“{a.forensic.hook_analysis.hook_text}” <span className="text-tinta">— {sentence(a.forensic.hook_analysis.mechanism)} {a.forensic.hook_analysis.why_it_works}</span></>],
+                      ["Formato", <>{sentence(FORMAT_LABELS[a.forensic.format_type.label])} <span className="text-tinta">{a.forensic.format_type.description}</span></>],
                       ["Tema", <>{a.forensic.topic_angle.thesis} <span className="text-tinta">Dolor: {a.forensic.topic_angle.pain_point}</span></>],
                       ["Momento", <>{a.forensic.timing_reason.catalyst} <span className="text-tinta">{a.forensic.timing_reason.why_this_week}</span></>],
                       ["Autor", <>{VERDICT_LABELS[a.forensic.author_vs_content.verdict]}. <span className="text-tinta">{a.forensic.author_vs_content.explanation}</span></>],

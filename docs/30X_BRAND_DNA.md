@@ -1,6 +1,6 @@
 # ADN de Marca 30X — Reglas de estilo y Matriz JEV
 
-> **Este archivo es configuración viva.** `src/lib/intelligence/bilbao-adapter.ts` y `jev-scorer.ts` lo leen en tiempo de ejecución y lo inyectan en el prompt de Gemini. Si el equipo de Media cambia una regla aquí, el siguiente guion ya sale con la regla nueva — sin desplegar código.
+> **Es configuración viva.** Este texto es el ADN del perfil de marca 30X: la IA lo sigue al puntuar la Matriz JEV y al escribir los guiones. Se edita desde **Perfiles** en la app y el siguiente análisis ya aplica la regla nueva, sin desplegar código. Este archivo es la versión inicial con la que se crea el perfil.
 >
 > Las reglas parten del brief del reto (§4.C de `CLAUDE.md`). Las marcadas con ✏️ son supuestos razonables que el equipo de 30X debe validar o corregir.
 

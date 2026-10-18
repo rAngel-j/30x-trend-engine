@@ -1,6 +1,6 @@
 # Guion de demo — 30X Radar de tendencias
 
-Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre.
+Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre. Las diapositivas que acompañan este guion están en [`docs/pitch/30X-Radar-pitch.pptx`](pitch/30X-Radar-pitch.pptx) (con notas del orador).
 
 ---
 

@@ -6,7 +6,7 @@ import { optionalEnv } from "@/lib/env";
 import { errorMessage, MissingCredentialError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
 import { normalizeLanguageCode } from "@/lib/intelligence/trend-stage";
-import { scrubHandles } from "@/lib/privacy";
+import { scrubText } from "@/lib/privacy";
 import type { DiscoveryRequest, RawSignal, SourceReport } from "@/types/trends";
 
 const API = "https://www.googleapis.com/youtube/v3";
@@ -123,8 +123,9 @@ function toSignal(video: VideoItem, channel: ChannelItem | undefined, query: str
     network: "youtube",
     source: "youtube_api",
     url: isShort ? `https://www.youtube.com/shorts/${video.id}` : `https://www.youtube.com/watch?v=${video.id}`,
-    title: scrubHandles(video.snippet.title),
-    excerpt: scrubHandles(video.snippet.description.slice(0, 600)),
+    title: scrubText(video.snippet.title),
+    // Las descripciones de YouTube suelen traer correos, teléfonos y enlaces a perfiles: se eliminan.
+    excerpt: scrubText(video.snippet.description.slice(0, 600)),
     published_at: video.snippet.publishedAt,
     language: normalizeLanguageCode(video.snippet.defaultAudioLanguage ?? video.snippet.defaultLanguage),
     format_hint: isShort ? "short_vertical" : "long_video",

@@ -12,6 +12,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { optionalEnv } from "@/lib/env";
 import { computePriority } from "@/lib/intelligence/trend-stage";
+import { scrubIndexedTitle, scrubText } from "@/lib/privacy";
 import { fingerprintUrl } from "@/lib/url";
 import type {
   RadarResult,
@@ -485,6 +486,16 @@ class SqliteTrendRepository implements TrendRepository {
         "UPDATE trend_signals SET raw = json_remove(raw, '$.submitted_by', '$.channel_id') " +
           "WHERE json_extract(raw, '$.submitted_by') IS NOT NULL OR json_extract(raw, '$.channel_id') IS NOT NULL",
       );
+      // Textos guardados por versiones con una limpieza más débil (correos, teléfonos, enlaces, menciones).
+      const suspicious = db
+        .prepare("SELECT id, title, excerpt FROM trend_signals WHERE excerpt LIKE '%@%' OR excerpt LIKE '%http%' OR excerpt LIKE '%www.%' OR title LIKE '%@%' OR title IN ('Instagram','LinkedIn','TikTok')")
+        .all() as { id: string; title: string; excerpt: string }[];
+      const fix = db.prepare("UPDATE trend_signals SET title = ?, excerpt = ? WHERE id = ?");
+      for (const row of suspicious) {
+        const excerpt = scrubText(row.excerpt);
+        const title = scrubIndexedTitle(row.title) || excerpt.slice(0, 120);
+        if (title !== row.title || excerpt !== row.excerpt) fix.run(title, excerpt, row.id);
+      }
       return db;
 
     })();

@@ -2,6 +2,18 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.4.1] — 2026-10-18 · Prueba real en 4 redes y privacidad reforzada
+
+### Corregido
+- **Privacidad:** las descripciones de YouTube y algunos snippets traían correos, teléfonos, enlaces a perfiles y menciones pegadas al texto (`texto@cuenta`). `scrubText` ahora los elimina en todas las fuentes, y la base SQLite existente se limpia al abrirse (verificado: 407 piezas sin restos).
+- Títulos indexados que solo decían "Instagram" pasan a usar el texto de la pieza.
+- `npm run doctor` distingue la cuota agotada de una clave inválida.
+
+### Verificado con datos reales
+- Radar en las 4 redes (YouTube + Tavily): 403 piezas (101 YouTube, 310 LinkedIn/Instagram/TikTok), fecha exacta en el 100 % de las piezas de redes cerradas, 10 temas multired con autopsia y guiones.
+- Los índices de búsqueda no traen métricas de alcance de las redes cerradas (límite legal): con varias redes, la pieza representativa sale de YouTube, la única con evidencia de rendimiento.
+- **Pendiente:** el radar solo de LinkedIn completo. La ingesta funciona, pero el análisis no se pudo terminar porque se agotaron las cuotas diarias gratuitas de Gemini y hubo un 503 temporal.
+
 ## [1.4.0] — 2026-10-17 · Primera prueba con claves reales
 
 Primera corrida real con YouTube y Gemini. Destapó problemas que las pruebas sin claves no podían ver; todos corregidos y re-verificados en real.

@@ -139,6 +139,7 @@ const ICON: Record<Status, string> = { ok: "✔", missing: "·", error: "✖", f
 async function main() {
   console.log("\nDiagnóstico de conexiones 30X (lee .env.local; nunca muestra claves)\n");
   const results = new Map<string, Status>();
+  const details = new Map<string, string>();
 
   for (const check of CHECKS) {
     let status: Status;
@@ -157,6 +158,7 @@ async function main() {
       }
     }
     results.set(check.name, status);
+    details.set(check.name, detail);
     console.log(`  ${ICON[status]} ${check.name.padEnd(28)} ${detail}`);
     if (status !== "ok") console.log(`    ${"".padEnd(28)} desbloquea: ${check.unlocks}`);
   }
@@ -169,7 +171,15 @@ async function main() {
     return;
   }
   console.log("Falta lo mínimo para operar:");
-  if (!coreOk) console.log("  - GEMINI_API_KEY válida (https://aistudio.google.com/apikey)");
+  if (!coreOk) {
+    const geminiDetail = details.get("Gemini") ?? "";
+    if (/quota|RESOURCE_EXHAUSTED|429/i.test(geminiDetail)) {
+      console.log(`  - La clave de Gemini es válida, pero se agotó la cuota gratuita de ${GEMINI_MODEL()} (20 solicitudes al día).`);
+      console.log("    Espera a que se renueve, usa otro modelo en GEMINI_MODEL (p. ej. gemini-3.7-flash) o activa facturación en Google AI Studio.");
+    } else {
+      console.log("  - GEMINI_API_KEY válida (https://aistudio.google.com/apikey)");
+    }
+  }
   if (!sourceOk) console.log("  - YOUTUBE_API_KEY o TAVILY_API_KEY válida (ver README → Levantar el entorno)");
   console.log("");
   process.exitCode = 1;

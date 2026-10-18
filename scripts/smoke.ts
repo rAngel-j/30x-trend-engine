@@ -20,7 +20,7 @@ import { enrichSignal } from "@/lib/intelligence/analyze";
 import { parseRetryDelay } from "@/lib/intelligence/gemini-client";
 import { weightJev } from "@/lib/intelligence/jev-scorer";
 import { computeTopicGrowth, representativeStrength, topicScore } from "@/lib/intelligence/topic-growth";
-import { scrubHandles, scrubIndexedTitle } from "@/lib/privacy";
+import { scrubHandles, scrubIndexedTitle, scrubText } from "@/lib/privacy";
 import { loadRadarSeeds, runRadar } from "@/lib/radar";
 import { classifyCohort, computePriority, detectLanguage } from "@/lib/intelligence/trend-stage";
 import { collectSignals, readPublicUrl } from "@/lib/sources";
@@ -96,7 +96,12 @@ async function main() {
   assert.equal(scrubIndexedTitle("Ana Pérez en LinkedIn: Cómo usamos agentes de IA | 12 comments"), "Cómo usamos agentes de IA");
   assert.equal(scrubIndexedTitle("Juan (@juan.ia) • Instagram reel"), "");
   assert.equal(scrubHandles("Gracias @maria_ventas por la idea"), "Gracias @cuenta por la idea");
-  ok("privacidad: se quitan nombres de autor y menciones de títulos y textos");
+  assert.equal(
+    scrubText("Escríbeme a ana.perez@gmail.com o al +57 300 123 4567. Mi canal: https://youtube.com/@AnaIA y aicreation@FotorAI"),
+    "Escríbeme a [correo] o al [teléfono]. Mi canal: [enlace] y aicreation@cuenta",
+  );
+  assert.equal(scrubIndexedTitle("Instagram"), "");
+  ok("privacidad: se quitan nombres de autor, menciones, correos, teléfonos y enlaces de títulos y textos");
 
   const seeds = await loadRadarSeeds();
   assert.ok(seeds.length >= 2 && seeds.some((x) => /AI/.test(x)) && seeds.some((x) => /IA/.test(x)));

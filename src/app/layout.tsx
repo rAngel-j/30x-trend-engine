@@ -6,8 +6,8 @@ import "./globals.css";
 const archivo = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-archivo", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "30X Radar de tendencias",
-  description: "Qué está despegando en LinkedIn, Instagram, TikTok y YouTube, por qué funcionó y el guion listo para tu marca.",
+  title: "Lunes AI · Tu semana de contenido, resuelta antes del lunes",
+  description: "Qué temas de IA crecen esta semana en LinkedIn, Instagram, TikTok y YouTube, por qué funcionan y el guion listo para grabar. Hecho para el equipo de Media de 30X.",
 };
 
 /**

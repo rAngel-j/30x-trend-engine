@@ -1,4 +1,4 @@
-# Contratos de API — 30X Trend Intelligence Engine
+# Contratos de API — Lunes AI (30X Trend Intelligence Engine)
 
 > Fuente de verdad de tipos: `src/types/trends.ts`. Este documento la describe y fija las firmas públicas de cada módulo.
 > Estado: módulos internos **implementados (Fase 2)** · endpoints HTTP **implementados (Fase 3)**.

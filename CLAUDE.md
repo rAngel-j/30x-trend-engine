@@ -120,4 +120,6 @@ Cuando el usuario te pida iniciar, ejecuta en este orden:
 
 - [x] Iteraciones posteriores — Radar semanal de temas, privacidad, cumplimiento, perfiles de marca, modo oscuro y preparación de la demo (`docs/DEMO.md`)
 
+**Nombre del producto:** Lunes AI ("Tu semana de contenido, resuelta antes del lunes"). "30X Trend Intelligence Engine" queda como nombre interno del proyecto.
+
 Ver `docs/CHANGELOG.md` para el detalle de cada entrega.

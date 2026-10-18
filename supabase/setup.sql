@@ -1,4 +1,4 @@
--- 30X Radar de tendencias — esquema completo para Supabase.
+-- Lunes AI — esquema completo para Supabase.
 -- Pega este archivo entero en Supabase → SQL Editor → Run. Es idempotente: se puede ejecutar más de una vez.
 -- Generado a partir de supabase/migrations/001-004 (si cambias una migración, regenera este archivo).
 

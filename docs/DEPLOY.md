@@ -1,6 +1,6 @@
 # Publicar la app en una URL
 
-Guía para dejar **30X Radar de tendencias** funcionando en una dirección pública (por ejemplo `https://30x-radar.vercel.app`), protegida con un código de acceso y con el radar ya preparado. Tarda unos **15 minutos** y es **gratis**.
+Guía para dejar **Lunes AI** funcionando en una dirección pública (por ejemplo `https://lunes-ai.vercel.app`), protegida con un código de acceso y con el radar ya preparado. Tarda unos **15 minutos** y es **gratis**.
 
 | Pieza | Servicio | Por qué |
 |---|---|---|
@@ -22,7 +22,7 @@ flowchart LR
 ## Paso 1 · Crear la base en Supabase (5 min)
 
 1. Entra a <https://supabase.com> → **Start your project** → inicia sesión con GitHub.
-2. **New project**: nombre `30x-radar`, una contraseña de base de datos (guárdala, aunque la app no la usa) y la región más cercana (por ejemplo *South America (São Paulo)* o *East US*). Espera 1-2 minutos a que se cree.
+2. **New project**: nombre `lunes-ai`, una contraseña de base de datos (guárdala, aunque la app no la usa) y la región más cercana (por ejemplo *South America (São Paulo)* o *East US*). Espera 1-2 minutos a que se cree.
 3. Menú izquierdo → **SQL Editor** → **New query**. Abre [`supabase/setup.sql`](../supabase/setup.sql), copia **todo** el contenido, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
 4. Copia dos valores, que necesitarás en los pasos 2 y 3:
    - **URL del proyecto**: botón **Connect** (arriba) o *Project Settings → Data API*. Tiene la forma `https://xxxx.supabase.co`.
@@ -60,7 +60,7 @@ Así la app publicada abre con los temas, autopsias y guiones ya preparados, **s
    |---|---|---|
    | `SUPABASE_URL` | Sí | La del paso 1 |
    | `SUPABASE_SERVICE_ROLE_KEY` | Sí | La clave secreta del paso 1 |
-   | `DEMO_ACCESS_CODE` | **Sí** | Un código que inventes (ej. `radar-30x-2026`). Sin él, cualquiera con la URL gastaría tu cuota diaria. |
+   | `DEMO_ACCESS_CODE` | **Sí** | Un código que inventes (ej. `lunes-30x-2026`). Sin él, cualquiera con la URL gastaría tu cuota diaria. |
    | `GEMINI_API_KEY` | Sí | La de tu `.env.local` |
    | `GEMINI_MODEL` | Sí | `gemini-3.8-flash` |
    | `YOUTUBE_API_KEY` | Sí | La de tu `.env.local` |
@@ -71,7 +71,7 @@ Así la app publicada abre con los temas, autopsias y guiones ya preparados, **s
    **No** añadas `SQLITE_PATH`.
 
 5. Pulsa **Deploy**. En 1-2 minutos te da la URL (`https://30x-trend-engine-xxxx.vercel.app`).
-6. Opcional: *Settings → Domains* para un nombre más corto, por ejemplo `30x-radar.vercel.app`.
+6. Opcional: *Settings → Domains* para un nombre más corto, por ejemplo `lunes-ai.vercel.app`.
 
 ## Paso 4 · Comprobar (2 min)
 
@@ -84,7 +84,7 @@ Así la app publicada abre con los temas, autopsias y guiones ya preparados, **s
 
 Envía **la URL y el código de acceso** por separado, por ejemplo:
 
-> Radar de tendencias de 30X: https://30x-radar.vercel.app · código: `radar-30x-2026`
+> Lunes AI, hecho para el equipo de Media de 30X: https://lunes-ai.vercel.app · código: `lunes-30x-2026`
 
 Cada vez que hagas `git push` a `main`, Vercel publica la versión nueva solo, en la misma URL.
 

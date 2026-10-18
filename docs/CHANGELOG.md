@@ -2,6 +2,13 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.7.0] — 2026-10-18 · Nuevo nombre: Lunes AI
+
+### Cambiado
+- El producto se llama **Lunes AI**, con el lema *"Tu semana de contenido, resuelta antes del lunes"*. Nace de la frase de cierre del pitch y deja claro el resultado (no la herramienta). Se presenta como *hecho para el equipo de Media de 30X*, sin usar la marca de 30X en el nombre, coherente con los perfiles de marca que lo hacen útil para cualquiera.
+- Nombre nuevo en la cabecera, la pantalla de acceso, el título de la pestaña, el README, la guía de demo, la de publicación y los títulos de los documentos.
+- Diapositivas regeneradas como `docs/pitch/Lunes-AI-pitch.pptx` (portada, pie y cierre con el nombre nuevo; notas del orador actualizadas).
+
 ## [1.6.2] — 2026-10-18 · Escrituras en Supabase y tiempos en Vercel
 
 ### Corregido

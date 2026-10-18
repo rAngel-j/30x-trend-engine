@@ -197,8 +197,10 @@ export default function RadarPage() {
     <div className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
       <header className="flex flex-wrap items-center justify-between gap-3 py-5">
         <p className="flex items-baseline gap-2">
-          <span className="wide text-2xl font-black">30X</span>
-          <span className="text-tinta">Radar de tendencias</span>
+          <span className="wide text-2xl font-black">
+            Lunes <span className="text-dorado-hondo">AI</span>
+          </span>
+          <span className="hidden text-tinta sm:inline">Tu semana de contenido, resuelta antes del lunes</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="profile-select" className="sr-only">

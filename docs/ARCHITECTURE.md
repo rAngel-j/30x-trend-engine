@@ -1,4 +1,4 @@
-# Arquitectura — 30X Trend Intelligence Engine
+# Arquitectura — Lunes AI (30X Trend Intelligence Engine)
 
 > Documento vivo. Se actualiza antes de construir cada módulo nuevo (regla §5 de `CLAUDE.md`).
 > Última actualización: 2026-10-17 · Fases 1 a 4.

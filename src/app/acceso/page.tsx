@@ -31,8 +31,10 @@ export default function AccessPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
-      <p className="wide text-2xl font-black">30X</p>
-      <h1 className="semiwide mt-6 text-3xl font-bold">Radar de tendencias</h1>
+      <p className="wide text-2xl font-black">
+        Lunes <span className="text-dorado-hondo">AI</span>
+      </p>
+      <h1 className="semiwide mt-6 text-3xl font-bold">Tu semana de contenido, resuelta antes del lunes</h1>
       <p className="mt-2 text-tinta">Esta demo está protegida para cuidar la cuota de las APIs. Ingresa el código que te compartieron.</p>
       <form onSubmit={submit} className="mt-6 flex gap-2">
         <label htmlFor="access-code" className="sr-only">

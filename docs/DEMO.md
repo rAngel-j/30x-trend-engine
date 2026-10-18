@@ -1,6 +1,6 @@
-# Guion de demo — 30X Radar de tendencias
+# Guion de demo — Lunes AI
 
-Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre. Las diapositivas que acompañan este guion están en [`docs/pitch/30X-Radar-pitch.pptx`](pitch/30X-Radar-pitch.pptx) (con notas del orador).
+Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 30X. Cada bloque dice qué mostrar, qué decir y qué criterio cubre. Las diapositivas que acompañan este guion están en [`docs/pitch/Lunes-AI-pitch.pptx`](pitch/Lunes-AI-pitch.pptx) (con notas del orador).
 
 ---
 
@@ -23,7 +23,7 @@ Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 
 
 ### 0:00 — El problema (30 s) · *Impacto en el reto*
 
-> "Hoy 30X paga miles de dólares al año en scraping que solo trae datos. No dice **por qué** algo funcionó, si es una tendencia que **empieza** o una que **todos copiaron**, ni si le sirve a **su audiencia**. Nosotros respondemos las tres preguntas, y con fuentes abiertas."
+> "Hoy 30X paga miles de dólares al año en scraping que solo trae datos. No dice **por qué** algo funcionó, si es una tendencia que **empieza** o una que **todos copiaron**, ni si le sirve a **su audiencia**. Por eso construimos **Lunes AI**: responde las tres preguntas, con fuentes abiertas, y deja la semana de contenido resuelta antes del lunes."
 
 ### 0:30 — La respuesta al entregable (90 s) · *Impacto en el reto*
 
@@ -59,7 +59,7 @@ Pantalla principal: **"Los N temas que más crecen esta semana"**, perfil 30X, r
 
 ### 4:30 — Cierre (30 s) · *Presentación*
 
-> "No le entregamos a 30X un tablero para interpretar: le entregamos el lunes resuelto. Qué tema crece, por qué funciona, si le sirve a su audiencia y el guion listo para grabar, en una pantalla y con fuentes legales."
+> "No le entregamos a 30X un tablero para interpretar: le entregamos el lunes. Eso es Lunes AI. Qué tema crece, por qué funciona, si le sirve a su audiencia y el guion listo para grabar, en una pantalla y con fuentes legales."
 
 ---
 

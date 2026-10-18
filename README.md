@@ -1,4 +1,6 @@
-# 30X Radar de tendencias
+# Lunes AI
+
+> **Tu semana de contenido, resuelta antes del lunes.**
 
 **Qué temas están creciendo esta semana en LinkedIn, Instagram, TikTok y YouTube, por qué funcionan, si le sirven a tu audiencia y el guion listo para grabar.**
 

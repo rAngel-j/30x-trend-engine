@@ -25,7 +25,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300; // Gemini con "alta demanda" reintenta con esperas: 120 s se quedaba corto en Vercel (504).
 
 const DiscoverBody = z.object({
   query: z.string().trim().min(2).max(200),

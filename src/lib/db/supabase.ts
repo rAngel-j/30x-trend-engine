@@ -276,6 +276,21 @@ function chunk<T>(items: T[], size = IN_CHUNK): T[][] {
   return out;
 }
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * PostgREST recibe el cuerpo como JSON de Postgres, que rechaza un emoji cortado a la mitad al recortar un texto
+ * ("invalid input syntax for type json") y el carácter nulo. SQLite los aceptaba; aquí se limpian antes de escribir.
+ */
+function wellFormed<T>(value: T): T {
+  if (typeof value === "string") return value.replace(LONE_SURROGATE, "").replace(/\u0000/g, "") as T;
+  if (Array.isArray(value)) return value.map(wellFormed) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, wellFormed(v)])) as T;
+  }
+  return value;
+}
+
 function clampLimit(limit?: number): number {
   return Math.min(Math.max(Math.trunc(limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
 }
@@ -337,7 +352,7 @@ class SupabaseTrendRepository implements TrendRepository {
     for (const part of chunk(rows)) {
       const { data, error } = await this.client
         .from("trend_signals")
-        .upsert(part, { onConflict: "fingerprint" })
+        .upsert(wellFormed(part), { onConflict: "fingerprint" })
         .select(LIST_COLUMNS.join(","));
       this.fail(error);
       stored.push(...(data as unknown as Record<string, unknown>[]).map((r) => rowToSignal(r)));
@@ -350,7 +365,7 @@ class SupabaseTrendRepository implements TrendRepository {
     if (!current) throw new Error(`Señal ${id} no encontrada`);
     const { data, error } = await this.client
       .from("trend_signals")
-      .update({
+      .update(wellFormed({
         analysis,
         format_type: analysis.forensic.format_type.label,
         jev_score: analysis.jev.jev_latam_score,
@@ -358,7 +373,7 @@ class SupabaseTrendRepository implements TrendRepository {
         analysis_status: "analyzed",
         analysis_error: null,
         analysis_profile_id: analysis.profile?.id ?? null,
-      })
+      }))
       .eq("id", id)
       .select(LIST_COLUMNS.join(","))
       .single();
@@ -369,7 +384,7 @@ class SupabaseTrendRepository implements TrendRepository {
   async markAnalysisFailed(id: string, message: string, profileId?: string): Promise<void> {
     const { error } = await this.client
       .from("trend_signals")
-      .update({ analysis_status: "failed", analysis_error: message.slice(0, 1000), ...(profileId ? { analysis_profile_id: profileId } : {}) })
+      .update(wellFormed({ analysis_status: "failed", analysis_error: message.slice(0, 1000), ...(profileId ? { analysis_profile_id: profileId } : {}) }))
       .eq("id", id);
     this.fail(error);
   }
@@ -451,14 +466,14 @@ class SupabaseTrendRepository implements TrendRepository {
   }
 
   async logDiscoveryRun(run: DiscoveryRunLog): Promise<void> {
-    const { error } = await this.client.from("discovery_runs").insert({
+    const { error } = await this.client.from("discovery_runs").insert(wellFormed({
       query: run.query,
       networks: run.networks,
       window_days: run.windowDays,
       sources: run.sources,
       signals_found: run.signalsFound,
       started_at: run.startedAt,
-    });
+    }));
     this.fail(error);
   }
 
@@ -473,11 +488,11 @@ class SupabaseTrendRepository implements TrendRepository {
   }
 
   async saveRadar(run: NewRadarRun, topics: NewRadarTopic[]): Promise<RadarResult> {
-    const { data: runRow, error } = await this.client.from("radar_runs").insert(run).select("*").single();
+    const { data: runRow, error } = await this.client.from("radar_runs").insert(wellFormed(run)).select("*").single();
     this.fail(error);
     const runId = String((runRow as Record<string, unknown>).id);
     if (topics.length) {
-      const { error: topicError } = await this.client.from("radar_topics").insert(topics.map((t) => ({ ...t, run_id: runId })));
+      const { error: topicError } = await this.client.from("radar_topics").insert(wellFormed(topics.map((t) => ({ ...t, run_id: runId }))));
       this.fail(topicError);
     }
     return (await this.getRadar(runId))!;
@@ -521,7 +536,7 @@ class SupabaseTrendRepository implements TrendRepository {
     const taken = new Set((await this.listProfiles()).map((p) => p.slug));
     const { data, error } = await this.client
       .from("brand_profiles")
-      .insert({ ...input, slug: uniqueSlug(slugify(input.name), taken), is_default: isDefault })
+      .insert(wellFormed({ ...input, slug: uniqueSlug(slugify(input.name), taken), is_default: isDefault }))
       .select("*")
       .single();
     this.fail(error);
@@ -531,7 +546,7 @@ class SupabaseTrendRepository implements TrendRepository {
   async updateProfile(id: string, patch: Partial<BrandProfileInput>): Promise<BrandProfile> {
     const { data, error } = await this.client
       .from("brand_profiles")
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update(wellFormed({ ...patch, updated_at: new Date().toISOString() }))
       .eq("id", id)
       .select("*")
       .single();
@@ -565,7 +580,7 @@ class SupabaseTrendRepository implements TrendRepository {
   }
 
   async createView(profileId: string, name: string, filters: TrendFilters): Promise<SavedView> {
-    const { data, error } = await this.client.from("saved_views").insert({ profile_id: profileId, name, filters }).select("*").single();
+    const { data, error } = await this.client.from("saved_views").insert(wellFormed({ profile_id: profileId, name, filters })).select("*").single();
     this.fail(error);
     return rowToView(data as Record<string, unknown>);
   }

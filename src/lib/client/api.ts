@@ -23,7 +23,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { code: string; message: string } };
   if (!res.ok) {
-    throw new ApiError(body.error?.code ?? "INTERNAL", body.error?.message ?? `Error HTTP ${res.status}`, res.status, body);
+    // 504 sin cuerpo JSON: el hosting cortó la petición por tiempo (suele ser Gemini saturado).
+    const fallback =
+      res.status === 504
+        ? "La operación tardó más de lo que permite el servidor (suele pasar cuando Gemini está saturado). Inténtalo de nuevo en unos minutos."
+        : `Error HTTP ${res.status}`;
+    throw new ApiError(body.error?.code ?? "INTERNAL", body.error?.message ?? fallback, res.status, body);
   }
   return body as T;
 }

@@ -2,6 +2,12 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.6.2] — 2026-10-18 · Escrituras en Supabase y tiempos en Vercel
+
+### Corregido
+- **"[Supabase] invalid input syntax for type json" al actualizar el radar:** al recortar textos a veces se corta un emoji a la mitad; SQLite lo aceptaba, pero PostgREST lee el cuerpo como JSON de Postgres y lo rechaza (reproducido en PostgreSQL 17). Todo lo que se escribe en Supabase se limpia antes (mitades de emoji y carácter nulo).
+- **Error 504 en el Sensor de Comunidad publicado:** `/api/analyze-url` y `/api/discover` pasan de 120 s a 300 s, como el radar; los reintentos ante "alta demanda" de Gemini no cabían en 120 s. Si el hosting corta por tiempo, la interfaz lo explica en lugar de mostrar "Error HTTP 504".
+
 ## [1.6.1] — 2026-10-18 · Radar en la nube
 
 ### Corregido

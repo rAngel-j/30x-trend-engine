@@ -1,6 +1,6 @@
 {
   "name": "30x-trend-engine",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "30X Trend Intelligence Engine: descubrimiento de tendencias en tiempo real, autopsia forense 5D, filtro JEV LatAm y adaptación al ADN de @30x / @andresbilbao.",
   "engines": {
@@ -14,7 +14,8 @@
     "check": "tsc --noEmit && npm run smoke && next build",
     "smoke": "node --env-file-if-exists=.env.local --import tsx scripts/smoke.ts",
     "doctor": "node --env-file-if-exists=.env.local --import tsx scripts/doctor.ts",
-    "demo:prepare": "node --env-file-if-exists=.env.local --import tsx scripts/demo-prepare.ts"
+    "demo:prepare": "node --env-file-if-exists=.env.local --import tsx scripts/demo-prepare.ts",
+    "db:push": "node --env-file-if-exists=.env.local --import tsx scripts/db-push.ts"
   },
   "dependencies": {
     "@google/genai": "^2.30.0",

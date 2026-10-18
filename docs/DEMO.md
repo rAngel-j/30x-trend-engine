@@ -13,7 +13,7 @@ Demo de **5 minutos** pensada para los 5 criterios de evaluación del Hackathon 
 | La mañana de la demo | No correr más pruebas con IA | El plan gratuito de Gemini permite 20 solicitudes al día; cada radar usa 3. |
 | 10 min antes | `npm run build && npm start`, abrir http://localhost:3000 en **modo oscuro** | Producción es más rápido que desarrollo; el modo oscuro se ve mejor en proyector. |
 | 10 min antes | Tener a mano un enlace de LinkedIn público con su texto copiado | Para mostrar el Sensor de Comunidad en vivo (2 solicitudes). |
-| Si la URL es pública | Definir `DEMO_ACCESS_CODE` | Nadie puede gastar la cuota sin el código. |
+| Si la URL es pública | Seguir [`docs/DEPLOY.md`](DEPLOY.md) y definir `DEMO_ACCESS_CODE` | Nadie puede gastar la cuota sin el código. Abrir la URL la víspera (Supabase gratis pausa proyectos inactivos). |
 
 **Plan B:** si Gemini responde "alta demanda" o se agota la cuota, el radar precargado y sus guiones ya están guardados: la demo completa funciona sin llamar a la IA. Solo el Sensor en vivo la necesita.
 

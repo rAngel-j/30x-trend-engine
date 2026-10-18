@@ -1018,6 +1018,17 @@ class SqliteTrendRepository implements TrendRepository {
 
 let repository: TrendRepository | null = null;
 
+/**
+ * En hosting sin disco persistente (Vercel) solo /tmp admite escritura: la app arranca igual,
+ * pero los datos se pierden entre despliegues. Para publicar se usa Supabase (docs/DEPLOY.md).
+ */
+function defaultSqlitePath(): string {
+  const configured = optionalEnv("SQLITE_PATH");
+  if (configured) return resolve(/*turbopackIgnore: true*/ process.cwd(), configured);
+  if (process.env.VERCEL) return "/tmp/trends.db";
+  return resolve(/*turbopackIgnore: true*/ process.cwd(), ".data/trends.db");
+}
+
 export function getTrendRepository(): TrendRepository {
   if (repository) return repository;
   const url = optionalEnv("SUPABASE_URL");
@@ -1025,7 +1036,7 @@ export function getTrendRepository(): TrendRepository {
   repository =
     url && key
       ? new SupabaseTrendRepository(createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }))
-      : new SqliteTrendRepository(resolve(/*turbopackIgnore: true*/ process.cwd(), optionalEnv("SQLITE_PATH") ?? ".data/trends.db"));
+      : new SqliteTrendRepository(defaultSqlitePath());
   return repository;
 }
 

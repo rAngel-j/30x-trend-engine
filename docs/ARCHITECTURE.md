@@ -258,6 +258,7 @@ flowchart LR
 - **Dedupe:** `fingerprint = sha256(url canónica)`; el upsert solo actualiza columnas de ingesta, nunca borra un análisis previo.
 - **Filtros dinámicos** soportados en ambos motores: red, etapa, formato, ventana de fecha, rango JEV, outlier mínimo, idioma, estado de análisis, texto libre y orden (`priority`, `jev`, `outlier`, `recent`, `velocity`).
 - Esquema: `supabase/migrations/001_trend_signals.sql` (índices compuestos por cada filtro de la `ControlBar`).
+- **Publicación** (`docs/DEPLOY.md`): Vercel + Supabase. `supabase/setup.sql` reúne las migraciones 001-004 en un solo archivo idempotente para pegar en el SQL Editor; `npm run db:push` (`scripts/db-push.ts`) copia la base SQLite local (perfiles, piezas, análisis, radares, vistas) a Supabase por `id`, sin llamar a la IA, para publicar con el radar ya preparado. En Vercel sin Supabase, el fallback SQLite escribe en `/tmp` (efímero) para que la app arranque igual.
 - SQLite usa el `node:sqlite` nativo de Node ≥ 22.13 en vez de Prisma/Drizzle: cero binarios nativos que compilar en Windows y cero paso de generación, que es lo que exige "nunca falle en local".
 
 ## 7b-bis. Cumplimiento de reglas (auditoría 2026-10-17)
@@ -435,3 +436,4 @@ Nunca imprime valores de claves: solo `OK`, `FALTA` o el error del proveedor. Sa
 | 7 | Búsqueda bilingüe por defecto | La etapa `emerging` necesita comparar inglés vs. español; una sola consulta en español no puede detectarla. |
 | 9 | `gemini-3.8-flash` en lugar de `gemini-2.5-flash` | La especificación pedía 2.5-flash, pero Google ya no lo habilita para cuentas nuevas (404 al generar). 3.8-flash es el Flash estable vigente y se verificó con Structured Outputs. Se fija la versión en lugar de `gemini-flash-latest` para que los resultados sean reproducibles. |
 | 8 | Notion por descubrimiento de esquema | Cada equipo tiene su propia base de contenidos; exigir columnas fijas rompe el plug & play. |
+| 10 | Vercel + Supabase para publicar | Gratis para el hackathon, despliegue automático en cada `git push` y funciones de hasta 300 s (lo que tarda un radar). Supabase porque el disco de Vercel es efímero. La copia `db:push` evita gastar cuota de Gemini para poblar la nube. |

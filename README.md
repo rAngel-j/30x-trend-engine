@@ -161,12 +161,14 @@ npm run demo:prepare
 
 Checklist, guion de 5 minutos y plan B en [`docs/DEMO.md`](docs/DEMO.md).
 
-### Usar Supabase o publicar la app
+### Publicar la app en una URL (gratis, ~15 min)
 
-1. Crea un proyecto en Supabase y ejecuta en orden, desde el SQL Editor, las migraciones `supabase/migrations/001` a `004`.
-2. Pon `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en el servidor: la app usa Postgres automáticamente.
-3. Si la app va a quedar en una URL pública, define `DEMO_ACCESS_CODE`: sin el código nadie entra ni gasta tu cuota. Los webhooks entran con `INGEST_WEBHOOK_SECRET`.
-4. El radar tarda 2-4 minutos por petición: elige un hosting cuyo plan permita funciones de hasta 300 s (`maxDuration` ya está configurado). Si no, preséntala desde un portátil con `npm run build && npm start`.
+Guía paso a paso en [`docs/DEPLOY.md`](docs/DEPLOY.md): **Vercel** (la app, se publica sola en cada `git push`) + **Supabase** (la base de datos).
+
+1. Supabase: crea el proyecto y pega [`supabase/setup.sql`](supabase/setup.sql) en el SQL Editor (las 4 migraciones en un solo archivo).
+2. Pon `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en `.env.local` y ejecuta `npm run db:push`: sube el radar ya preparado sin gastar cuota de IA.
+3. Vercel: importa el repositorio de GitHub, añade las variables (incluido `DEMO_ACCESS_CODE`, para que nadie gaste tu cuota sin el código) y pulsa **Deploy**.
+4. Comparte la URL y el código de acceso.
 
 ---
 

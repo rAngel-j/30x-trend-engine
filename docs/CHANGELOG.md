@@ -2,6 +2,16 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.6.0] — 2026-10-18 · Publicar en una URL
+
+### Añadido
+- **Guía de publicación** `docs/DEPLOY.md`: Vercel (plan gratuito, despliegue en cada `git push`, funciones de 300 s) + Supabase, con variables, comprobación, cómo compartir, límites y problemas frecuentes.
+- `supabase/setup.sql`: las migraciones 001-004 en un solo archivo idempotente para pegar en el SQL Editor. Validado dos veces seguidas en PostgreSQL 17 (PGlite).
+- `npm run db:push`: copia la base local (perfiles, piezas, análisis, radares y vistas) a Supabase sin llamar a la IA, para publicar con el radar ya preparado. Probado con la base real (420 piezas, 9 radares, 81 temas) contra PostgreSQL 17.
+
+### Cambiado
+- En Vercel sin Supabase, el fallback SQLite usa `/tmp` para que la app arranque igual. `SQLITE_PATH` queda comentada en `.env.example`.
+
 ## [1.5.1] — 2026-10-18 · Pitch de 5 minutos
 
 ### Añadido

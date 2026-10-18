@@ -10,6 +10,15 @@ import type { TrendSignal } from "@/types/trends";
 
 const AI_CONCURRENCY = 3;
 
+/** Aplica la retención de 30 días de YouTube. Nunca bloquea la petición si falla. */
+export async function enforceRetention(repo: TrendRepository): Promise<void> {
+  try {
+    await repo.purgeExpiredYouTube();
+  } catch (err) {
+    console.warn("[retención] no se pudo purgar YouTube:", errorMessage(err));
+  }
+}
+
 export const aiEnabled = () => Boolean(optionalEnv("GEMINI_API_KEY"));
 
 /** Analiza una señal persistida; si falla, la marca como `failed` y devuelve el estado actualizado. */

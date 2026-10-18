@@ -60,8 +60,9 @@ Cada fila de `trend_signals` responde las 3 preguntas del reto:
 |---|---|---|
 | `discoverYouTubeOutliers` | `(req: DiscoveryRequest) => Promise<{ signals: RawSignal[]; report: SourceReport }>` | `search.list` + `videos.list` + `channels.list`. Calcula outlier, velocidad, peso de autor. `report.quota_units` ≈ 102 por formato. |
 | `fetchYouTubeVideos` | `(ids: string[], query: string) => Promise<RawSignal[]>` | Para el Sensor de Comunidad: enriquece una URL de YouTube con métricas reales. |
+| `lookupIndexedUrl` | `(url: string, network) => Promise<SerpHit | null>` | Busca esa URL exacta en el índice público (Tavily → CSE). Para el Sensor en redes cerradas. |
 | `discoverSocialSerp` | `(req: DiscoveryRequest) => Promise<{ signals: RawSignal[]; reports: SourceReport[] }>` | Tavily (principal) → Google CSE (respaldo). Solo `linkedin`, `instagram`, `tiktok`. |
-| `readPublicUrl` | `(url: string) => Promise<PublicReading>` | oEmbed + Jina Reader (+ YouTube API si es un video). Devuelve `{ signal: RawSignal; content: string; providers: string[]; warnings: string[] }`. Rechaza URLs privadas (anti-SSRF). |
+| `readPublicUrl` | `(url: string, { text? }) => Promise<PublicReading>` | Redes cerradas: oEmbed + índice de búsqueda + texto de la persona (nunca descarga la página). YouTube: API + oEmbed. Web abierta: Jina. Devuelve `{ signal: RawSignal; content: string; providers: string[]; warnings: string[] }`. Rechaza URLs privadas (anti-SSRF). |
 | `collectSignals` | `(req: DiscoveryRequest) => Promise<DiscoveryResult>` | Corre las fuentes en paralelo, deduplica por URL canónica y aplica `classifyCohort`. Nunca lanza por una fuente caída: lo reporta en `sources[]`. |
 
 ### 2.2 Inteligencia — `src/lib/intelligence/*`
@@ -88,6 +89,7 @@ interface TrendRepository {
   getSignalByUrl(url: string): Promise<TrendSignal | null>;   // por fingerprint de la URL canónica
   querySignals(filters: TrendFilters): Promise<TrendPage>;
   logDiscoveryRun(run: DiscoveryRunLog): Promise<void>;
+  purgeExpiredYouTube(days?: number): Promise<number>;   // política de 30 días de la YouTube API
   close(): Promise<void>;                 // libera el archivo SQLite
 }
 getTrendRepository(): TrendRepository   // elige Supabase o SQLite según el entorno
@@ -160,20 +162,21 @@ Parámetros con valores fuera del dominio (p. ej. `stages=viral`) → `400 INVAL
 
 ```jsonc
 // Request (UI o webhook externo: Slack Workflow, Make, Zapier…) — envía url O id
-{ "url": "https://www.linkedin.com/posts/…", "submitted_by": "maria@30x", "force": false }
+{ "url": "https://www.linkedin.com/posts/…", "submitted_by": "maria@30x", "text": "Texto del post tal como lo viste (opcional, ≤ 8 000)", "force": false }
 // Re-análisis de una señal ya guardada (botón "Analizar con IA"): leer la URL es opcional
 { "id": "uuid", "force": true }
 // Response 200
 {
   "item": TrendSignal,             // con analysis si hay GEMINI_API_KEY
-  "providers": ["oembed","jina"],
+  "providers": ["search_index","community_text"],   // youtube_api | oembed | search_index | jina | community_text
   "warnings": [],
   "cached": false                  // true si ya estaba analizada y no se pidió force
 }
 ```
 
+- En LinkedIn, Instagram y TikTok **no se descarga la página**: se usa oEmbed oficial, el índice de búsqueda y `text`. Si ninguno aporta contenido → `502` con la sugerencia de pegar el texto.
 - La etapa de una pieza aislada es **provisional** (`stage_evidence.cohort_size = 1`).
-- Con `id`, si la URL no se puede leer (p. ej. LinkedIn sin `JINA_API_KEY`) se analiza con el extracto indexado y se avisa en `warnings`. `404` si el id no existe; `400` si se envían `url` e `id` a la vez.
+- Con `id`, si la URL no se puede leer (p. ej. LinkedIn no indexado) se analiza con el extracto indexado y se avisa en `warnings`. `404` si el id no existe; `400` si se envían `url` e `id` a la vez.
 - **Autenticación de webhooks:** si `INGEST_WEBHOOK_SECRET` está definida, las llamadas que no vienen del mismo origen deben enviar `Authorization: Bearer <secreto>`; si no → `401`.
 - `400` URL inválida o privada · `502` no se pudo leer la URL pública.
 

@@ -97,7 +97,7 @@ export interface AnalyzeUrlResponse {
   cached: boolean;
 }
 
-export const analyzeUrl = (body: { url: string; submitted_by?: string; force?: boolean } | { id: string; force?: boolean }) =>
+export const analyzeUrl = (body: { url: string; submitted_by?: string; text?: string; force?: boolean } | { id: string; force?: boolean }) =>
   request<AnalyzeUrlResponse>("/api/analyze-url", { method: "POST", body: JSON.stringify(body) });
 
 export type ExportTarget = "slack" | "notion" | "make";

@@ -278,7 +278,9 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
           <StageMeter stage={signal.stage} rule={signal.stage_evidence.rule} />
           <Stat value={signal.jev_score === null ? "—" : String(signal.jev_score)} label="JEV" />
           {signal.outlier_score !== null ? (
-            <Stat value={`×${signal.outlier_score >= 10 ? Math.round(signal.outlier_score) : signal.outlier_score}`} label="sobre su promedio" emphasis={signal.outlier_score >= 5} />
+            <span title="Cálculo de 30X con datos de YouTube: vistas del video dividido entre el promedio de vistas del canal. No es una métrica de YouTube.">
+              <Stat value={`×${signal.outlier_score >= 10 ? Math.round(signal.outlier_score) : signal.outlier_score}`} label="sobre su promedio" emphasis={signal.outlier_score >= 5} />
+            </span>
           ) : (
             <Stat value={compact(m.views ?? m.likes)} label={m.views !== null ? "vistas" : m.likes !== null ? "reacciones" : "sin métricas"} />
           )}

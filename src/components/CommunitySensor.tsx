@@ -16,6 +16,7 @@ type Feedback = { tone: "ok" | "warn" | "error"; text: string } | null;
 export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
+  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
@@ -38,9 +39,10 @@ export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
       } catch {
         /* ignorar */
       }
-      const res = await analyzeUrl({ url: url.trim(), submitted_by: name.trim() || undefined });
+      const res = await analyzeUrl({ url: url.trim(), submitted_by: name.trim() || undefined, text: text.trim() || undefined });
       onAnalyzed(res.item);
       setUrl("");
+      setText("");
       const pendingAi = res.item.analysis_status !== "analyzed";
       setFeedback({
         tone: pendingAi ? "warn" : "ok",
@@ -95,6 +97,18 @@ export default function CommunitySensor({ onAnalyzed }: CommunitySensorProps) {
           {busy ? "Analizando…" : "Analizar enlace"}
         </button>
       </div>
+      <details className="mt-2 text-sm" open={text.length > 0}>
+        <summary className="cursor-pointer text-tinta hover:text-carbon">Añadir el texto de la publicación (recomendado en LinkedIn, Instagram y TikTok)</summary>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={8000}
+          rows={4}
+          placeholder="Copia aquí el texto tal como lo viste. No descargamos páginas de redes cerradas: sus términos lo prohíben."
+          aria-label="Texto de la publicación"
+          className="mt-2 w-full rounded-lg border border-arena bg-crema p-3 placeholder:text-ceniza focus:border-carbon focus:outline-none"
+        />
+      </details>
       {feedback && (
         <p
           role="status"

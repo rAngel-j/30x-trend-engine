@@ -6,10 +6,10 @@
 import { optionalEnv } from "@/lib/env";
 import { errorMessage, MissingCredentialError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
-import { instagramShortcodeToDate, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
+import { canonicalizeUrl, instagramShortcodeToDate, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
 import type { DiscoveryRequest, FormatHint, Network, RawSignal, SignalMetrics, SourceId, SourceReport } from "@/types/trends";
 
-type SocialNetwork = Extract<Network, "linkedin" | "instagram" | "tiktok">;
+export type SocialNetwork = Extract<Network, "linkedin" | "instagram" | "tiktok">;
 export const SERP_NETWORKS: readonly SocialNetwork[] = ["linkedin", "instagram", "tiktok"];
 
 interface NetworkSpec {
@@ -217,6 +217,63 @@ function toSignal(network: SocialNetwork, hit: SerpHit, query: string): RawSigna
     query,
     raw: { provider: hit.provider, relevance: hit.score ?? null, indexed_published: hit.published ?? null },
   };
+}
+
+// ── Búsqueda de una URL concreta (Sensor de Comunidad) ─────────────
+
+export interface IndexedHit {
+  title: string;
+  content: string;
+  published: string | null;
+  provider: SourceId;
+}
+
+/**
+ * Busca esa URL exacta en el índice público (Tavily → Google CSE) y devuelve lo que el buscador ya indexó.
+ * Es la vía legal para "leer" una pieza de LinkedIn, Instagram o TikTok sin descargar la página.
+ */
+export async function lookupIndexedUrl(url: string, network: SocialNetwork): Promise<IndexedHit | null> {
+  const target = canonicalizeUrl(url);
+  const matches = (candidate: string) => {
+    try {
+      return canonicalizeUrl(candidate) === target;
+    } catch {
+      return false;
+    }
+  };
+
+  const tavilyKey = optionalEnv("TAVILY_API_KEY");
+  if (tavilyKey) {
+    const res = await fetchJson<{ results?: { url: string; title?: string; content?: string; published_date?: string }[] }>(
+      "Tavily",
+      "https://api.tavily.com/search",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tavilyKey}` },
+        body: JSON.stringify({ query: url, search_depth: "basic", max_results: 5, include_domains: [SPECS[network].domain] }),
+      },
+    );
+    const hit = res.results?.find((r) => matches(r.url));
+    if (hit) return { title: hit.title ?? "", content: hit.content ?? "", published: hit.published_date ?? null, provider: "tavily" };
+  }
+
+  const cseKey = optionalEnv("GOOGLE_CSE_API_KEY");
+  const cseId = optionalEnv("GOOGLE_CSE_ID");
+  if (cseKey && cseId) {
+    const params = new URLSearchParams({ key: cseKey, cx: cseId, q: url, num: "5" });
+    const res = await fetchJson<{ items?: CseItem[] }>("Google CSE", `https://www.googleapis.com/customsearch/v1?${params}`);
+    const item = res.items?.find((i) => matches(i.link));
+    if (item) {
+      const meta = item.pagemap?.metatags?.[0] ?? {};
+      return {
+        title: meta["og:title"] ?? item.title ?? "",
+        content: [meta["og:description"], item.snippet].filter(Boolean).join(" — "),
+        published: meta["article:published_time"] ?? null,
+        provider: "google_cse",
+      };
+    }
+  }
+  return null;
 }
 
 // ── API pública ────────────────────────────────────────────────────

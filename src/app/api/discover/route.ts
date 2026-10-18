@@ -9,7 +9,7 @@ import { apiError, errorResponse, parseJsonBody, parseWith, searchParamsToObject
 import { getTrendRepository } from "@/lib/db/supabase";
 import { optionalEnv } from "@/lib/env";
 import { expandQuery } from "@/lib/intelligence/query-expander";
-import { analyzeTopPending } from "@/lib/pipeline";
+import { analyzeTopPending, enforceRetention } from "@/lib/pipeline";
 import { collectSignals } from "@/lib/sources";
 import {
   ANALYSIS_STATUSES,
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
   try {
     const body = await parseJsonBody(req, DiscoverBody);
     const repo = getTrendRepository();
+    await enforceRetention(repo);
 
     const serpReady = Boolean(optionalEnv("TAVILY_API_KEY") || (optionalEnv("GOOGLE_CSE_API_KEY") && optionalEnv("GOOGLE_CSE_ID")));
     const youtubeReady = body.networks.includes("youtube") && Boolean(optionalEnv("YOUTUBE_API_KEY"));

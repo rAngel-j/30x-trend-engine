@@ -40,6 +40,8 @@ export interface TrendRepository {
   getSignalByUrl(url: string): Promise<TrendSignal | null>;
   querySignals(filters: TrendFilters): Promise<TrendPage>;
   logDiscoveryRun(run: DiscoveryRunLog): Promise<void>;
+  /** Borra señales de YouTube no refrescadas en `days` días (políticas de la YouTube API). Devuelve cuántas borró. */
+  purgeExpiredYouTube(days?: number): Promise<number>;
   /** Libera conexiones (SQLite mantiene el archivo abierto). */
   close(): Promise<void>;
 }
@@ -55,6 +57,8 @@ const SORT_COLUMNS: Record<SortKey, string> = {
 };
 
 const DEFAULT_LIMIT = 20;
+/** Políticas de la YouTube API: los datos guardados se borran o refrescan en un máximo de 30 días. */
+export const YOUTUBE_RETENTION_DAYS = 30;
 const MAX_LIMIT = 100;
 
 const LIST_COLUMNS = [
@@ -263,6 +267,16 @@ class SupabaseTrendRepository implements TrendRepository {
       started_at: run.startedAt,
     });
     if (error) throw new Error(`Supabase: ${error.message}`);
+  }
+
+  async purgeExpiredYouTube(days = YOUTUBE_RETENTION_DAYS): Promise<number> {
+    const { count, error } = await this.client
+      .from("trend_signals")
+      .delete({ count: "exact" })
+      .eq("network", "youtube")
+      .lt("last_seen_at", sinceIso(days));
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    return count ?? 0;
   }
 
   async close(): Promise<void> {}
@@ -477,6 +491,12 @@ class SqliteTrendRepository implements TrendRepository {
       `INSERT INTO discovery_runs (id, query, networks, window_days, sources, signals_found, started_at, finished_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(randomUUID(), run.query, JSON.stringify(run.networks), run.windowDays, JSON.stringify(run.sources), run.signalsFound, run.startedAt, new Date().toISOString());
+  }
+
+  async purgeExpiredYouTube(days = YOUTUBE_RETENTION_DAYS): Promise<number> {
+    const db = await this.db();
+    const res = db.prepare("DELETE FROM trend_signals WHERE network = 'youtube' AND last_seen_at < ?").run(sinceIso(days));
+    return Number(res.changes);
   }
 
   async close(): Promise<void> {

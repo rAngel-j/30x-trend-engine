@@ -47,10 +47,15 @@ Es **el hueco, no el taladro**: el equipo no recibe un dashboard para interpreta
 | **YouTube Data API v3** | Vistas, suscriptores y promedio del canal → Outlier Score | API oficial con clave propia |
 | **Tavily** (Google Programmable Search como respaldo) | Publicaciones públicas indexadas de LinkedIn, Instagram y TikTok | Índices de búsqueda públicos: nunca se visita la red social |
 | **oEmbed** (YouTube, TikTok, Instagram) | Metadatos de los enlaces que pega el equipo | Protocolo oficial de embebido |
-| **Jina Reader** | Texto legible de una URL pública | El fetch lo hace Jina respetando las reglas del sitio |
+| **Jina Reader** | Texto de artículos de la **web abierta** (blogs, medios, documentación) | Solo sitios públicos sin restricción. **Nunca** se usa sobre LinkedIn, Instagram ni TikTok |
+| **Comunidad 30X** | Enlace + texto de la publicación que la persona vio y pega a mano | Es un humano compartiendo contenido público, no un robot |
 | **Google Gemini 2.5 Flash** | Autopsia, JEV y guiones | Solo Structured Outputs validados |
 
-**Nunca se usan** logins, cookies, cuentas de terceros, datos privados ni scrapers directos de Meta, LinkedIn o TikTok. Cuando una red no expone una métrica de forma legal, el motor la deja vacía en lugar de inventarla.
+**Nunca se usan** logins, cookies, cuentas de terceros, datos privados ni descargas de páginas de LinkedIn, Instagram o TikTok, ni directas ni a través de lectores o proxies de terceros: que lo haga otro servicio no lo vuelve legítimo. Cuando una red no expone una métrica de forma legal, el motor la deja vacía en lugar de inventarla.
+
+**Políticas de YouTube API:** los datos de YouTube se borran si no se refrescan en 30 días, la interfaz atribuye los datos a YouTube y enlaza sus Términos y la Política de privacidad de Google, y las métricas propias (Outlier, velocidad, etapa, JEV) se presentan como cálculos de 30X, no como métricas de YouTube.
+
+La auditoría completa, red por red, está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (sección "Cumplimiento de reglas") y se verifica en cada `npm run smoke`.
 
 ---
 
@@ -60,7 +65,7 @@ Es **el hueco, no el taladro**: el equipo no recibe un dashboard para interpreta
 flowchart LR
     Q["Tema + redes + ventana"] --> X["Traducción ES ⇄ EN<br/>(Gemini)"]
     X --> YT["YouTube API<br/>Outlier Score"] & SERP["Índices públicos<br/>LinkedIn · IG · TikTok"]
-    URL["Enlace de la comunidad 30X"] --> PR["oEmbed + Jina"]
+    URL["Enlace + texto de la comunidad 30X"] --> PR["oEmbed + índice de búsqueda<br/>(Jina solo web abierta)"]
     YT & SERP --> ST["Etapa de la cohorte<br/>idioma + frescura + outlier"]
     ST & PR --> DB[("Supabase<br/>o SQLite local")]
     DB --> AI["Autopsia 5D ∥ Matriz JEV<br/>→ Guiones ADN si JEV ≥ 55"]
@@ -202,7 +207,7 @@ Contratos completos, ejemplos de respuesta y códigos de error: [`docs/API_CONTR
 
 - LinkedIn, Instagram y TikTok no publican vistas por vías legales: para esas redes el outlier queda vacío y la prioridad se apoya en JEV, etapa y recencia.
 - La etapa de un enlace suelto del Sensor es provisional, porque no hay otras piezas del mismo tema con las cuales compararlo.
-- Jina Reader sin clave puede bloquear dominios muy consultados. Para YouTube no importa (se usa la API). Para LinkedIn conviene `JINA_API_KEY`; sin ella, el análisis usa el extracto indexado.
+- En LinkedIn, Instagram y TikTok el Sensor solo cuenta con oEmbed, lo que el buscador tenga indexado y el texto que pegue la persona. Si una publicación no está indexada, pegar su texto da el análisis más completo.
 - No hay login de usuarios: se recomienda desplegar en red privada o detrás de la protección del hosting.
 
 Detalle técnico y decisiones de diseño: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Historial: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).

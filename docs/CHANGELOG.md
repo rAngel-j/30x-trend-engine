@@ -2,6 +2,23 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.2.0] — 2026-10-17 · Auditoría de cumplimiento de reglas
+
+Revisión de cada fuente contra la regla del reto: contenido público sí; datos privados, contenido tras login y técnicas que dependan de violar términos de servicio, no.
+
+### Corregido
+- **El Sensor ya no descarga páginas de LinkedIn, Instagram ni TikTok.** Antes las pedía a Jina Reader: es scraping tercerizado de redes cuyos términos lo prohíben. Ahora usa oEmbed oficial, lo que el índice de búsqueda tiene de esa URL exacta (`lookupIndexedUrl`) y el texto que la persona pega a mano. Jina queda solo para la web abierta.
+- **Retención de 30 días de YouTube:** `purgeExpiredYouTube()` borra las señales de YouTube no refrescadas en 30 días; corre en cada `POST /api/discover` y `POST /api/analyze-url`.
+- **Métricas derivadas y atribución:** la interfaz aclara que Outlier, velocidad, etapa y JEV son cálculos de 30X, y el pie de página atribuye los datos a YouTube con enlaces a sus Términos y a la Política de privacidad de Google.
+- README: se retiró la afirmación no verificada de que Jina "respeta las reglas del sitio".
+
+### Añadido
+- Campo opcional "texto de la publicación" en el Sensor de Comunidad (`text` en `POST /api/analyze-url`).
+- Sección "Cumplimiento de reglas" en `docs/ARCHITECTURE.md` con la tabla red por red.
+
+### Verificado
+- Smoke test: la purga borra solo datos de YouTube vencidos; un post de LinkedIn sin índice ni texto da error que pide el texto, y con texto se analiza sin usar Jina.
+
 ## [1.1.0] — 2026-10-17 · Puesta en marcha
 
 ### Añadido

@@ -316,6 +316,25 @@ export default function RadarPage() {
           )}
         </section>
       </div>
+
+      <footer className="mt-16 border-t border-arena pt-6 text-xs leading-relaxed text-tinta">
+        <p className="max-w-3xl">
+          Solo contenido público: APIs oficiales, índices de búsqueda, oEmbed y enlaces que comparte el equipo. Nunca usamos cuentas, logins ni descargamos
+          páginas de LinkedIn, Instagram o TikTok.
+        </p>
+        <p className="mt-2 max-w-3xl">
+          Datos de video obtenidos con YouTube API Services. Outlier, velocidad, etapa y score JEV son cálculos propios de 30X, no métricas de YouTube. Al usar
+          esta herramienta aceptas los{" "}
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-carbon">
+            Términos de servicio de YouTube
+          </a>{" "}
+          y la{" "}
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-carbon">
+            Política de privacidad de Google
+          </a>
+          . Los datos de YouTube se borran si no se refrescan en 30 días.
+        </p>
+      </footer>
     </div>
   );
 }

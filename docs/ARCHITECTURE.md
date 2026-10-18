@@ -240,6 +240,33 @@ flowchart LR
 - Esquema: `supabase/migrations/001_trend_signals.sql` (índices compuestos por cada filtro de la `ControlBar`).
 - SQLite usa el `node:sqlite` nativo de Node ≥ 22.13 en vez de Prisma/Drizzle: cero binarios nativos que compilar en Windows y cero paso de generación, que es lo que exige "nunca falle en local".
 
+## 7b-bis. Cumplimiento de reglas (auditoría 2026-10-17)
+
+Regla del reto: entra cualquier enfoque para descubrir y entender contenido público; no entran datos privados, contenido detrás de un login de terceros ni técnicas que dependan de violar términos de servicio.
+
+| Red / fuente | Qué se usa | Qué NO se usa |
+|---|---|---|
+| YouTube | YouTube Data API v3 (oficial), oEmbed | Descarga de páginas o de video |
+| LinkedIn | Índice de búsqueda (Tavily / Google CSE): título, snippet y URL indexados | Jina u otro lector sobre linkedin.com, la API privada (Voyager) o sesiones |
+| Instagram | oEmbed oficial de Meta (con token de app) + índice de búsqueda | Lectores de terceros, endpoints internos, cuentas |
+| TikTok | oEmbed oficial + índice de búsqueda | Lectores de terceros, endpoints internos, cuentas |
+| Web abierta | Jina Reader | — |
+| Comunidad 30X | Enlace + texto que la persona vio públicamente y pega a mano | — |
+
+**Sensor de Comunidad en redes cerradas:**
+
+```mermaid
+flowchart LR
+    U["Enlace + texto opcional"] --> N{"¿Red cerrada?"}
+    N -- "LinkedIn / IG / TikTok" --> O["oEmbed oficial"] & S["Índice de búsqueda<br/>(la misma URL)"] & T["Texto pegado por la persona"]
+    N -- "YouTube" --> Y["YouTube API + oEmbed"]
+    N -- "Web abierta" --> J["Jina Reader"]
+```
+
+**Retención de datos de YouTube:** las políticas de la YouTube API exigen borrar o refrescar en 30 días los datos guardados. `purgeExpiredYouTube()` borra las señales de YouTube cuyo `last_seen_at` tiene más de 30 días; cada nueva búsqueda que las vuelve a encontrar las refresca. Se ejecuta al inicio de `POST /api/discover` y de `POST /api/analyze-url`.
+
+**Métricas derivadas y atribución:** Outlier, velocidad, peso del autor, etapa y JEV son cálculos propios y la interfaz los presenta como tales. El pie de página atribuye los datos a YouTube y enlaza sus Términos de servicio y la Política de privacidad de Google.
+
 ## 7c. Diagnóstico de conexiones (`npm run doctor`)
 
 `scripts/doctor.ts` lee `.env.local` y prueba cada servicio con la llamada **más barata posible** contra la API real, sin escribir datos:
@@ -278,6 +305,6 @@ Nunca imprime valores de claves: solo `OK`, `FALTA` o el error del proveedor. Sa
 | 3 | Fecha de publicación desde el ID de la URL | Dato exacto, público y legal; los índices a menudo no traen la fecha. |
 | 4 | Score JEV ponderado en código, no por el LLM | Reproducible y auditable para el jurado; el LLM solo argumenta cada criterio. |
 | 5 | Adaptación solo si JEV ≥ umbral | Ahorra ~1/3 del costo de IA en piezas que no sirven a la audiencia LatAm. |
-| 6 | Jina Reader para el Sensor de Comunidad | Jina hace el fetch desde su infraestructura y respeta `robots`; nuestro servidor nunca toca la red social directamente. |
+| 6 | Jina Reader **solo para la web abierta** (blogs, medios, docs) | Pedirle a un tercero que descargue LinkedIn, Instagram o TikTok sigue siendo scraping de redes cuyos términos lo prohíben. En redes cerradas el Sensor usa solo oEmbed oficial, el índice de búsqueda y el texto que aporta la persona. |
 | 7 | Búsqueda bilingüe por defecto | La etapa `emerging` necesita comparar inglés vs. español; una sola consulta en español no puede detectarla. |
 | 8 | Notion por descubrimiento de esquema | Cada equipo tiene su propia base de contenidos; exigir columnas fijas rompe el plug & play. |

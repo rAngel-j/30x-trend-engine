@@ -37,7 +37,9 @@ async function main() {
 
   assert.equal(parseIsoDuration("PT1H2M3S"), 3723);
   assert.equal(parseIsoDuration("PT45S"), 45);
-  const m = computeOutlierMetrics({ views: 500_000, channelViews: 10_000_000, channelVideos: 1000, publishedAt: new Date(Date.now() - 10 * 3_600_000).toISOString() });
+  // Reloj fijo: con Date.now() en dos momentos distintos la velocidad variaría según la carga de la máquina.
+  const t0 = Date.now();
+  const m = computeOutlierMetrics({ views: 500_000, channelViews: 10_000_000, channelVideos: 1000, publishedAt: new Date(t0 - 10 * 3_600_000).toISOString(), now: t0 });
   assert.equal(m.outlier_score, 50);
   assert.equal(m.author_weight, 0);
   assert.equal(m.velocity_per_hour, 50_000);
@@ -119,6 +121,17 @@ async function main() {
     assert.throws(() => validateOverrides({ slackWebhookUrl: "https://evil.example.com/x" }), /hooks.slack.com/);
     validateOverrides({ slackWebhookUrl: "https://hooks.slack.com/services/T/B/X", makeWebhookUrl: "https://hook.us1.make.com/abc" });
     ok("overrides de webhooks solo en dominios oficiales");
+
+    // Retención de 30 días (políticas de la YouTube API): se envejece una señal y se purga.
+    const { DatabaseSync } = await import("node:sqlite");
+    await repo.close();
+    const raw = new DatabaseSync(join(dir, "trends.db"));
+    raw.prepare("UPDATE trend_signals SET last_seen_at = ? WHERE id = ?").run(new Date(Date.now() - 31 * 86_400_000).toISOString(), stored[1]!.id);
+    raw.close();
+    const purged = await repo.purgeExpiredYouTube();
+    assert.equal(purged, 1);
+    assert.equal((await repo.querySignals({})).total, 5);
+    ok("retención: borra datos de YouTube no refrescados en 30 días");
   } finally {
     await repo.close();
     rmSync(dir, { recursive: true, force: true });
@@ -146,6 +159,16 @@ async function main() {
   }
   await assert.rejects(readPublicUrl("http://127.0.0.1/admin"), /públicas/);
   ok("bloquea URLs privadas (anti-SSRF)");
+
+  // Cumplimiento: en redes cerradas nunca se descarga la página. Sin índice ni texto → error que pide el texto.
+  const linkedinPost = "https://www.linkedin.com/posts/alguien_ia-activity-7250000000000000000-abcd";
+  if (!optionalEnv("TAVILY_API_KEY") && !optionalEnv("GOOGLE_CSE_API_KEY")) {
+    await assert.rejects(readPublicUrl(linkedinPost), /pega el texto/);
+  }
+  const withText = await readPublicUrl(linkedinPost, { text: "Así automatizamos la prospección con agentes de IA en un equipo de 4 personas." });
+  assert.ok(withText.providers.includes("community_text") && !withText.providers.includes("jina"));
+  assert.equal(withText.signal.published_at?.slice(0, 4), "2024");
+  ok("LinkedIn: sin descargar la página; usa índice, oEmbed o el texto aportado por la persona");
 
   console.log("\n5) Motor JEV en Gemini");
   if (!optionalEnv("GEMINI_API_KEY")) {

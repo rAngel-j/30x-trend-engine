@@ -11,8 +11,9 @@ import { assertWebhookAuth, errorResponse, parseJsonBody } from "@/lib/api";
 import { getTrendRepository, type TrendRepository } from "@/lib/db/supabase";
 import { errorMessage, NotFoundError } from "@/lib/errors";
 import { classifyCohort } from "@/lib/intelligence/trend-stage";
-import { aiEnabled, analyzeStoredSignal } from "@/lib/pipeline";
+import { aiEnabled, analyzeStoredSignal, enforceRetention } from "@/lib/pipeline";
 import { readPublicUrl } from "@/lib/sources";
+import { MAX_COMMUNITY_TEXT } from "@/lib/sources/public-reader";
 import type { StagedSignal, TrendSignal } from "@/types/trends";
 
 export const runtime = "nodejs";
@@ -24,6 +25,8 @@ const AnalyzeBody = z
     url: z.string().trim().min(8).max(2048).optional(),
     id: z.string().trim().min(1).max(64).optional(),
     submitted_by: z.string().trim().max(120).optional(),
+    /** Texto que la persona vio públicamente (vía legal para redes cerradas). */
+    text: z.string().trim().max(MAX_COMMUNITY_TEXT).optional(),
     force: z.boolean().default(false),
   })
   .refine((b) => Boolean(b.url) !== Boolean(b.id), { message: "Envía `url` o `id` (uno de los dos)." });
@@ -43,6 +46,7 @@ export async function POST(req: Request) {
     assertWebhookAuth(req);
     const body = await parseJsonBody(req, AnalyzeBody);
     const repo = getTrendRepository();
+    await enforceRetention(repo);
 
     // ── Re-análisis de una señal guardada ──
     if (body.id) {
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
     }
 
     // ── URL nueva desde la comunidad ──
-    const reading = await readPublicUrl(body.url!);
+    const reading = await readPublicUrl(body.url!, { text: body.text });
     const existing = await repo.getSignalByUrl(reading.signal.url);
 
     if (existing?.analysis_status === "analyzed" && !body.force) {

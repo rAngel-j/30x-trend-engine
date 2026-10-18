@@ -1,26 +1,39 @@
 /**
  * Sensor de Comunidad 30X — deconstruye cualquier URL pública que el equipo pegue o envíe por webhook.
- * oEmbed oficial (YouTube, TikTok, Instagram con token Meta) + Jina Reader para el texto completo
- * + YouTube Data API si es un video (métricas reales y Outlier Score).
- * Nuestro servidor nunca descarga la red social directamente: Jina y los endpoints oEmbed lo hacen.
+ *
+ * Cumplimiento (docs/ARCHITECTURE.md §7b-bis): en LinkedIn, Instagram y TikTok NUNCA se descarga la página,
+ * ni directamente ni a través de lectores de terceros. Solo se usan:
+ *   - oEmbed oficial (YouTube, TikTok; Instagram con token de app de Meta),
+ *   - lo que el índice de búsqueda público ya tiene de esa URL (Tavily / Google CSE),
+ *   - el texto que la persona vio públicamente y pega a mano ("Comunidad como sensor"),
+ *   - YouTube Data API para videos de YouTube.
+ * Jina Reader se usa solo para la web abierta (blogs, medios, documentación).
  */
 import { optionalEnv } from "@/lib/env";
 import { errorMessage, SourceError } from "@/lib/errors";
 import { fetchJson } from "@/lib/http";
 import { assertPublicHttpUrl, detectNetwork, extractYouTubeId, instagramShortcodeToDate, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
-import { extractEngagement } from "./social-serp";
+import { extractEngagement, lookupIndexedUrl, type IndexedHit, type SocialNetwork } from "./social-serp";
 import { fetchYouTubeVideos } from "./youtube-outliers";
 import type { FormatHint, Network, RawSignal } from "@/types/trends";
 
 const MAX_CONTENT_CHARS = 12_000;
+export const MAX_COMMUNITY_TEXT = 8_000;
+
+const CLOSED_NETWORKS: readonly Network[] = ["linkedin", "instagram", "tiktok"];
 
 export interface PublicReading {
   signal: RawSignal;
-  /** Texto completo legible (markdown) para la autopsia forense. */
+  /** Texto legible para la autopsia forense. */
   content: string;
-  /** Proveedores que respondieron, en orden: "youtube_api", "oembed", "jina". */
+  /** Proveedores que aportaron datos: "youtube_api", "oembed", "search_index", "jina", "community_text". */
   providers: string[];
   warnings: string[];
+}
+
+export interface ReadOptions {
+  /** Texto de la publicación tal como la persona lo vio públicamente. */
+  text?: string;
 }
 
 interface OEmbed {
@@ -52,6 +65,7 @@ async function readOEmbed(network: Network, url: string): Promise<OEmbed | null>
   return endpoint ? fetchJson<OEmbed>(`oEmbed ${network}`, endpoint, { timeoutMs: 10_000 }) : null;
 }
 
+/** Solo web abierta. Nunca se llama para redes cerradas. */
 async function readJina(url: string): Promise<JinaResponse["data"] | null> {
   const key = optionalEnv("JINA_API_KEY");
   const res = await fetchJson<JinaResponse>("Jina Reader", `https://r.jina.ai/${url}`, {
@@ -65,6 +79,8 @@ async function readJina(url: string): Promise<JinaResponse["data"] | null> {
   });
   return res.data ?? null;
 }
+
+const indexConfigured = () => Boolean(optionalEnv("TAVILY_API_KEY") || (optionalEnv("GOOGLE_CSE_API_KEY") && optionalEnv("GOOGLE_CSE_ID")));
 
 function publishedFromUrl(network: Network, url: string): Date | null {
   if (network === "linkedin") return linkedinIdToDate(url);
@@ -89,53 +105,77 @@ function handleFromUrl(network: Network, url: string): string | null {
   return null;
 }
 
-export async function readPublicUrl(input: string): Promise<PublicReading> {
+function cleanIndexedTitle(title: string): string {
+  return title.replace(/\s*[|•-]\s*(LinkedIn|Instagram|TikTok).*$/i, "").replace(/^(.+?)\s+(?:on|en)\s+(LinkedIn|Instagram):\s*/i, "").trim();
+}
+
+export async function readPublicUrl(input: string, options: ReadOptions = {}): Promise<PublicReading> {
   const url = assertPublicHttpUrl(input).toString();
   const network = detectNetwork(url);
+  const closed = CLOSED_NETWORKS.includes(network);
+  const text = options.text?.trim().slice(0, MAX_COMMUNITY_TEXT) || null;
   const ytId = network === "youtube" ? extractYouTubeId(url) : null;
+  const useYouTubeApi = Boolean(ytId && optionalEnv("YOUTUBE_API_KEY"));
   const providers: string[] = [];
   const warnings: string[] = [];
 
-  const useYouTubeApi = Boolean(ytId && optionalEnv("YOUTUBE_API_KEY"));
-  const [ytResult, oembedResult, jinaResult] = await Promise.allSettled([
+  const [ytResult, oembedResult, indexResult, jinaResult] = await Promise.allSettled([
     useYouTubeApi ? fetchYouTubeVideos([ytId!], "community") : Promise.resolve([]),
     readOEmbed(network, url),
-    // Con la YouTube API ya tenemos título y descripción completos; Jina anónimo además bloquea youtube.com.
-    useYouTubeApi ? Promise.resolve(null) : readJina(url),
+    closed && indexConfigured() ? lookupIndexedUrl(url, network as SocialNetwork) : Promise.resolve(null),
+    network === "web" ? readJina(url) : Promise.resolve(null),
   ]);
 
   const ytSignal = ytResult.status === "fulfilled" ? ytResult.value[0] ?? null : null;
   const oembed = oembedResult.status === "fulfilled" ? oembedResult.value : null;
+  const indexed: IndexedHit | null = indexResult.status === "fulfilled" ? indexResult.value : null;
   const jina = jinaResult.status === "fulfilled" ? jinaResult.value : null;
 
-  if (ytSignal) providers.push("youtube_api");
-  else if (ytResult.status === "rejected") warnings.push(errorMessage(ytResult.reason));
-  if (oembed) providers.push("oembed");
-  else if (oembedResult.status === "rejected") warnings.push(errorMessage(oembedResult.reason));
-  if (jina?.content || jina?.title) providers.push("jina");
-  else if (jinaResult.status === "rejected") warnings.push(errorMessage(jinaResult.reason));
-
-  if (providers.length === 0) {
-    throw new SourceError("Sensor de Comunidad", `No se pudo leer la URL pública. ${warnings.join(" · ")}`.trim(), 502);
+  for (const [ok, name, result] of [
+    [Boolean(ytSignal), "youtube_api", ytResult],
+    [Boolean(oembed), "oembed", oembedResult],
+    [Boolean(indexed), "search_index", indexResult],
+    [Boolean(jina?.content || jina?.title), "jina", jinaResult],
+  ] as const) {
+    if (ok) providers.push(name);
+    else if (result.status === "rejected") warnings.push(errorMessage(result.reason));
+  }
+  if (text) providers.push("community_text");
+  if (closed && !indexed && !text) {
+    warnings.push("El buscador no tiene indexada esta publicación. Pega su texto para un análisis más completo.");
   }
 
-  const content = (jina?.content ?? jina?.description ?? oembed?.title ?? ytSignal?.excerpt ?? "").slice(0, MAX_CONTENT_CHARS);
+  if (providers.length === 0) {
+    const hint = closed
+      ? "En LinkedIn, Instagram y TikTok no descargamos la página (sus términos lo prohíben): pega el texto de la publicación que viste."
+      : "";
+    throw new SourceError("Sensor de Comunidad", `No se pudo leer la URL pública. ${hint} ${warnings.join(" · ")}`.trim(), 502);
+  }
+
+  const content = [text, jina?.content ?? jina?.description, indexed?.content, oembed?.title, ytSignal?.excerpt]
+    .filter((v): v is string => Boolean(v && v.trim()))
+    .join("\n\n")
+    .slice(0, MAX_CONTENT_CHARS);
 
   if (ytSignal) {
     return { signal: { ...ytSignal, source: "community", query: "community" }, content: content || ytSignal.excerpt, providers, warnings };
   }
 
-  const published = publishedFromUrl(network, url) ?? (jina?.publishedTime ? new Date(jina.publishedTime) : null);
-  const engagement = extractEngagement(`${jina?.title ?? ""} ${jina?.description ?? ""} ${content.slice(0, 3000)}`);
+  const indexedDate = indexed?.published ? new Date(indexed.published) : null;
+  const published =
+    publishedFromUrl(network, url) ?? (jina?.publishedTime ? new Date(jina.publishedTime) : null) ?? (indexedDate && !Number.isNaN(indexedDate.getTime()) ? indexedDate : null);
+  const engagement = extractEngagement(`${indexed?.title ?? ""} ${indexed?.content ?? ""} ${jina?.title ?? ""} ${jina?.description ?? ""} ${content.slice(0, 3000)}`);
   const handle = oembed?.author_unique_id ?? handleFromUrl(network, url);
   const hours = published && !Number.isNaN(published.getTime()) ? Math.max((Date.now() - published.getTime()) / 3_600_000, 1) : null;
+  const title =
+    (oembed?.title ?? jina?.title ?? (indexed ? cleanIndexedTitle(indexed.title) : "") ?? "").trim() || text?.split("\n")[0]?.slice(0, 160) || url;
 
   const signal: RawSignal = {
     network,
     source: "community",
     url,
-    title: (oembed?.title ?? jina?.title ?? "").trim().slice(0, 300) || url,
-    excerpt: (jina?.description ?? content).slice(0, 800),
+    title: title.slice(0, 300),
+    excerpt: (indexed?.content ?? jina?.description ?? content).slice(0, 800),
     author_name: oembed?.author_name ?? null,
     author_handle: handle,
     author_url: oembed?.author_url ?? null,
@@ -148,7 +188,7 @@ export async function readPublicUrl(input: string): Promise<PublicReading> {
     velocity_per_hour: engagement.views !== null && hours ? Math.round((engagement.views / hours) * 100) / 100 : null,
     author_weight: null,
     query: "community",
-    raw: { providers, oembed_provider: oembed?.provider_name ?? null },
+    raw: { providers, oembed_provider: oembed?.provider_name ?? null, indexed_by: indexed?.provider ?? null, community_text: Boolean(text) },
   };
 
   return { signal, content, providers, warnings };

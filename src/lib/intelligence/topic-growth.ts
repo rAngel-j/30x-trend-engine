@@ -36,20 +36,24 @@ export function computeTopicGrowth(members: Pick<TrendSignal, "published_at">[],
   };
 }
 
+export function representativeStrength(s: Pick<TrendSignal, "outlier_score" | "metrics">): number {
+  const reach = s.metrics.views ?? s.metrics.likes ?? 0;
+  return Math.log10(reach + 10) + Math.log2(Math.min(s.outlier_score ?? 0, 50) + 1);
+}
+
 /** Puntaje final del tema. Sin JEV todavía, se asume 50 (neutro) para preseleccionar. */
 export function topicScore(growth: Pick<TopicGrowth, "growth_index" | "volume_index">, jev: number | null): number {
   return round1(0.5 * growth.growth_index + 0.2 * growth.volume_index + 0.3 * (jev ?? 50));
 }
 
-/** Pieza que mejor representa el tema: la de mejor rendimiento relativo, preferentemente de esta semana. */
+/**
+ * Pieza que mejor representa el tema, preferentemente de esta semana. Combina alcance y rendimiento relativo:
+ *   fuerza = log10(vistas + 10) + log2(min(outlier, 50) + 1)
+ * Así un video de 653 vistas ×4 en una cuenta diminuta no le gana a uno de 50.000 vistas ×2.
+ */
 export function pickRepresentative(members: TrendSignal[], now = Date.now()): TrendSignal | null {
   if (members.length === 0) return null;
   const recent = members.filter((m) => m.published_at && now - new Date(m.published_at).getTime() <= 7 * DAY);
   const pool = recent.length ? recent : members;
-  const strength = (s: TrendSignal) => [s.outlier_score ?? 0, s.metrics.views ?? s.metrics.likes ?? 0, s.analysis_status === "analyzed" ? 1 : 0];
-  return [...pool].sort((a, b) => {
-    const [ao, ae, aa] = strength(a);
-    const [bo, be, ba] = strength(b);
-    return bo! - ao! || be! - ae! || ba! - aa!;
-  })[0]!;
+  return [...pool].sort((a, b) => representativeStrength(b) - representativeStrength(a) || Number(b.analysis_status === "analyzed") - Number(a.analysis_status === "analyzed"))[0]!;
 }

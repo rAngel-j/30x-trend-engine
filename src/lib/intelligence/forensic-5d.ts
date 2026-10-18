@@ -9,7 +9,7 @@ import { FORMAT_TYPES, type ForensicAutopsy, type StagedSignal } from "@/types/t
 
 const str = (description: string): Schema => ({ type: Type.STRING, description });
 
-const FORENSIC_SCHEMA: Schema = {
+export const FORENSIC_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     hook_analysis: {
@@ -70,7 +70,7 @@ const FORENSIC_SCHEMA: Schema = {
 
 const text = z.string().trim().min(1);
 
-const ForensicValidator = z.object({
+export const ForensicValidator = z.object({
   hook_analysis: z.object({ hook_text: text, mechanism: text, why_it_works: text }),
   format_type: z.object({ label: z.enum(FORMAT_TYPES), description: text }),
   topic_angle: z.object({ thesis: text, pain_point: text }),
@@ -78,13 +78,13 @@ const ForensicValidator = z.object({
   author_vs_content: z.object({ verdict: z.enum(["author_driven", "content_driven", "balanced"]), explanation: text }),
 });
 
-const SYSTEM = `Eres el analista forense de contenido de 30X, la escuela de IA para líderes de Latinoamérica.
+export const FORENSIC_SYSTEM = `Eres el analista forense de contenido de 30X, la escuela de IA para líderes de Latinoamérica.
 Tu trabajo es explicar con rigor por qué una pieza de contenido funcionó, desglosando exactamente 5 variables.
 ${GROUNDING_RULES}
 - Para "author_vs_content" usa los datos cuantitativos: Outlier Score alto y peso del autor bajo ⇒ el mérito es del contenido; Outlier ≈ 1 y peso alto ⇒ lo explica la audiencia del autor. Sin datos cuantitativos, razona con seguidores y engagement disponibles y declara la incertidumbre.`;
 
 /** Con datos cuantitativos, el veredicto de autor se fija de forma determinista (auditable). */
-function verdictFromWeight(weight: number | null): ForensicAutopsy["author_vs_content"]["verdict"] | null {
+export function verdictFromWeight(weight: number | null): ForensicAutopsy["author_vs_content"]["verdict"] | null {
   if (weight === null) return null;
   if (weight >= 0.66) return "author_driven";
   if (weight <= 0.33) return "content_driven";
@@ -94,7 +94,7 @@ function verdictFromWeight(weight: number | null): ForensicAutopsy["author_vs_co
 export async function runForensic5D(signal: StagedSignal, content?: string): Promise<ForensicAutopsy> {
   const result = await generateStructured({
     task: "forensic-5d",
-    system: SYSTEM,
+    system: FORENSIC_SYSTEM,
     prompt: `Realiza la autopsia de las 5 variables de esta pieza.\n\n${describeSignal(signal, content)}`,
     schema: FORENSIC_SCHEMA,
     validator: ForensicValidator,

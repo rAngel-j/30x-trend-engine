@@ -10,7 +10,7 @@ import { loadBrandDna } from "@/lib/intelligence/gemini-client";
 import { clusterTopics } from "@/lib/intelligence/topic-clusterer";
 import { computeTopicGrowth, pickRepresentative, topicScore } from "@/lib/intelligence/topic-growth";
 import { evaluateStage } from "@/lib/intelligence/trend-stage";
-import { analyzeStoredSignal } from "@/lib/pipeline";
+import { analyzeStoredBatch } from "@/lib/pipeline";
 import { collectSignals, mergeReports } from "@/lib/sources";
 import { canonicalizeUrl } from "@/lib/url";
 import type { Network, RadarResult, SourceReport, StagedSignal, TrendSignal } from "@/types/trends";
@@ -19,7 +19,6 @@ import type { Network, RadarResult, SourceReport, StagedSignal, TrendSignal } fr
 export const RADAR_WINDOW_DAYS = 14;
 const PER_SOURCE = 15;
 const SEED_CONCURRENCY = 3;
-const AI_CONCURRENCY = 2;
 const EXTRA_CANDIDATES = 2;
 
 /** Lee las semillas de la sección "Semillas del Radar semanal" de docs/30X_BRAND_DNA.md. */
@@ -75,17 +74,24 @@ export async function runRadar(repo: TrendRepository, options: RadarOptions): Pr
     .slice(0, options.maxTopics + EXTRA_CANDIDATES);
 
   // 3. Por qué funciona y cómo adaptarlo: autopsia de la pieza más representativa de cada tema.
-  const analyzed = await mapWithConcurrency(candidates, AI_CONCURRENCY, async (c) => {
-    let rep: TrendSignal | null = pickRepresentative(c.members, now);
-    if (rep && rep.analysis_status !== "analyzed") {
-      try {
-        rep = await analyzeStoredSignal(repo, rep);
-      } catch (err) {
-        notes.push(`No se pudo analizar la pieza representativa de "${c.label}": ${errorMessage(err)}`);
-      }
-    }
-    return { ...c, rep };
-  });
+  // Un solo lote para todas las piezas representativas: 2 solicitudes a Gemini en total.
+  const withRep = candidates.map((c) => ({ ...c, rep: pickRepresentative(c.members, now) as TrendSignal | null }));
+  // Se reutiliza el análisis guardado salvo que no cumpla la regla de su tema: un tema saturado
+  // exige ángulo contrarian, y la pieza pudo analizarse antes con otra etapa.
+  const needsAnalysis = (c: (typeof withRep)[number]) => {
+    const rep = c.rep;
+    if (!rep) return false;
+    if (rep.analysis_status !== "analyzed") return true;
+    const scripts = rep.analysis?.adaptations;
+    return c.stage.stage === "saturated" && Boolean(scripts) && !scripts!.contrarian_angle;
+  };
+  const pending = withRep.filter(needsAnalysis).map((c) => c.rep!);
+  // Los guiones obedecen la etapa del TEMA: si está saturado, el ángulo contrarian es obligatorio.
+  const topicStage = new Map(withRep.filter((c) => c.rep).map((c) => [c.rep!.id, c.stage.stage]));
+  const fresh = new Map((await analyzeStoredBatch(repo, pending, topicStage)).map((s) => [s.id, s]));
+  const analyzed = withRep.map((c) => ({ ...c, rep: c.rep ? fresh.get(c.rep.id) ?? c.rep : null }));
+  const failed = analyzed.filter((c) => c.rep?.analysis_status === "failed");
+  if (failed.length) notes.push(`${failed.length} de ${analyzed.length} temas quedaron sin autopsia: ${failed[0]!.rep!.analysis_error}`);
 
   const topics: NewRadarTopic[] = analyzed
     .map((c) => {

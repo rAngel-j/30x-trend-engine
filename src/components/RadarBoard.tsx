@@ -77,6 +77,7 @@ function TopicRow({ topic, expanded, onToggle, onAnalyze, onExport }: { topic: R
               <p className="mb-3 max-w-prose text-sm text-tinta">Su autopsia explica por qué funciona el tema; sus guiones son la adaptación propuesta para 30X.</p>
               <ol>
                 <TrendCard
+                  inTopic
                   signal={rep}
                   rank={topic.rank}
                   expanded={repOpen}

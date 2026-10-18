@@ -43,7 +43,7 @@ Cada fila de `trend_signals` responde las 3 preguntas del reto:
   "priority_score": 87.3,
   "analysis_status": "pending | analyzed | failed",
   "analysis_error": null,
-  "analysis": { "forensic": {…}, "jev": {…}, "adaptations": {…} | null, "model": "gemini-2.5-flash", "analyzed_at": "…" },
+  "analysis": { "forensic": {…}, "jev": {…}, "adaptations": {…} | null, "model": "gemini-3.8-flash", "analyzed_at": "…" },
   "query": "agentes de IA ventas",
   "discovered_at": "…", "last_seen_at": "…"
 }
@@ -256,7 +256,7 @@ Parámetros con valores fuera del dominio (p. ej. `stages=viral`) → `400 INVAL
 {
   "repository": "sqlite",
   "sources": { "youtube_api": false, "tavily": false, "google_cse": false, "jina_key": false, "meta_oembed": false },
-  "ai": { "gemini": false, "model": "gemini-2.5-flash", "jev_threshold": 55 },
+  "ai": { "gemini": false, "model": "gemini-3.8-flash", "jev_threshold": 55 },
   "exports": { "slack": false, "notion": false, "make": false },
   "webhook_secret": true
 }

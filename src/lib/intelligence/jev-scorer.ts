@@ -11,7 +11,7 @@ export const JEV_WEIGHTS = { business_impact: 0.4, practical_applicability: 0.35
 
 const score = (description: string): Schema => ({ type: Type.INTEGER, minimum: 0, maximum: 100, description });
 
-const JEV_SCHEMA: Schema = {
+export const JEV_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     business_impact: score("Impacto en negocio / ROI para un ejecutivo LatAm (0-100)."),
@@ -29,7 +29,7 @@ const JEV_SCHEMA: Schema = {
 };
 
 const points = z.number().int().min(0).max(100);
-const JevValidator = z.object({
+export const JevValidator = z.object({
   business_impact: points,
   practical_applicability: points,
   executive_clarity: points,

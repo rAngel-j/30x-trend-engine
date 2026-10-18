@@ -13,6 +13,8 @@ interface TrendCardProps {
   onToggle: () => void;
   onAnalyze: (signal: TrendSignal) => Promise<unknown>;
   onExport: (signal: TrendSignal, target: ExportTarget) => Promise<ExportResult>;
+  /** Dentro de un tema del radar la etapa es la del tema: la tarjeta no repite su propia etapa. */
+  inTopic?: boolean;
 }
 
 /** Solo enlaces http(s): nunca `javascript:` u otros esquemas llegados de fuentes externas. */
@@ -237,7 +239,7 @@ function ExportRow({ signal, onExport }: { signal: TrendSignal; onExport: TrendC
   );
 }
 
-export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze, onExport }: TrendCardProps) {
+export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze, onExport, inTopic = false }: TrendCardProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const a = signal.analysis;
   const m = signal.metrics;
@@ -273,7 +275,7 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
         </div>
 
         <div className="col-span-2 flex items-center justify-between gap-5 sm:col-span-1 sm:justify-end">
-          <StageMeter stage={signal.stage} rule={signal.stage_evidence.rule} />
+          {!inTopic && <StageMeter stage={signal.stage} rule={signal.stage_evidence.rule} />}
           <Stat value={signal.jev_score === null ? "—" : String(signal.jev_score)} label="JEV" />
           {signal.outlier_score !== null ? (
             <span title="Cálculo de 30X con datos de YouTube: vistas del video dividido entre el promedio de vistas del canal. No es una métrica de YouTube.">
@@ -288,10 +290,12 @@ export default function TrendCard({ signal, rank, expanded, onToggle, onAnalyze,
 
       {expanded && (
         <div id={panelId} className="space-y-5 px-4 pb-5 sm:pl-20">
-          <Section title="Por qué está en esta etapa">
-            <p className="max-w-prose text-sm" title={signal.stage_evidence.rule}>
-              {STAGE_INFO[signal.stage].hint} <span className="text-tinta">{stageExplanation(signal.stage_evidence)}</span>
-            </p>
+          <Section title={inTopic ? "Métricas de la pieza" : "Por qué está en esta etapa"}>
+            {!inTopic && (
+              <p className="max-w-prose text-sm" title={signal.stage_evidence.rule}>
+                {STAGE_INFO[signal.stage].hint} <span className="text-tinta">{stageExplanation(signal.stage_evidence)}</span>
+              </p>
+            )}
             <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
               {(
                 [

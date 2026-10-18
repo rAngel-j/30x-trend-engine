@@ -2,7 +2,8 @@
  * Prueba de humo de Fases 1-2: `npm run smoke`.
  * - Funciones deterministas (fechas desde IDs, parser de cifras, etapa, prioridad).
  * - Repositorio SQLite con filtros dinámicos (en un archivo temporal, no toca .data/).
- * - Fuentes: con credenciales hace llamadas reales; sin ellas verifica que se desactivan sin romper.
+ * - Fuentes: sin credenciales verifica que se desactivan sin romper. Con credenciales, las llamadas que gastan
+ *   cuota (YouTube, Tavily, Gemini) solo corren con SMOKE_LIVE=1, para que `npm run check` nunca consuma cuota.
  * - Sensor de Comunidad sobre una URL pública real (oEmbed + Jina, no requieren clave).
  */
 import assert from "node:assert/strict";
@@ -16,8 +17,9 @@ import { validateOverrides } from "@/lib/export";
 import { optionalEnv } from "@/lib/env";
 import { errorMessage } from "@/lib/errors";
 import { enrichSignal } from "@/lib/intelligence/analyze";
+import { parseRetryDelay } from "@/lib/intelligence/gemini-client";
 import { weightJev } from "@/lib/intelligence/jev-scorer";
-import { computeTopicGrowth, topicScore } from "@/lib/intelligence/topic-growth";
+import { computeTopicGrowth, representativeStrength, topicScore } from "@/lib/intelligence/topic-growth";
 import { scrubHandles, scrubIndexedTitle } from "@/lib/privacy";
 import { loadRadarSeeds, runRadar } from "@/lib/radar";
 import { classifyCohort, computePriority, detectLanguage } from "@/lib/intelligence/trend-stage";
@@ -28,6 +30,8 @@ import { canonicalizeUrl, linkedinIdToDate, tiktokIdToDate } from "@/lib/url";
 import type { RawSignal } from "@/types/trends";
 
 const ok = (label: string) => console.log(`  ✔ ${label}`);
+const LIVE = process.env.SMOKE_LIVE === "1";
+const sourcesConfigured = () => Boolean(optionalEnv("YOUTUBE_API_KEY") || optionalEnv("TAVILY_API_KEY") || optionalEnv("GOOGLE_CSE_API_KEY"));
 
 async function main() {
   console.log("\n1) Cálculos deterministas");
@@ -65,6 +69,12 @@ async function main() {
   assert.equal(weightJev({ business_impact: 90, practical_applicability: 80, executive_clarity: 70 }), 82);
   ok("ponderación JEV 0.40/0.35/0.25");
 
+  // Reintentos de Gemini: espera por minuto vs. cuota diaria agotada.
+  assert.equal(parseRetryDelay("Please retry in 37.5s."), 37_500);
+  assert.equal(parseRetryDelay("Please retry in 19h24m59.1s. (RESOURCE_EXHAUSTED)"), 69_899_100);
+  assert.equal(parseRetryDelay("sin pista"), null);
+  ok("Gemini: distingue límite por minuto (reintenta) de cuota diaria (avisa sin reintentar)");
+
   // Radar: crecimiento semanal determinista.
   const day = 86_400_000;
   const growthMembers = [
@@ -76,6 +86,10 @@ async function main() {
   assert.deepEqual([g.this_week, g.last_week, g.growth_index, g.volume_index], [8, 2, 97.5, 80]);
   assert.equal(computeTopicGrowth([{ published_at: new Date(t0 - day).toISOString() }, { published_at: new Date(t0 - 10 * day).toISOString() }], t0).growth_index, 50);
   assert.equal(topicScore(g, 84), 90); // 0.5·97.5 + 0.2·80 + 0.3·84 = 89.95
+  const tiny = { outlier_score: 4.08, metrics: { views: 653 } } as never;
+  const solid = { outlier_score: 2, metrics: { views: 50_000 } } as never;
+  assert.ok(representativeStrength(solid) > representativeStrength(tiny));
+  ok("representante: 50.000 vistas ×2 le gana a 653 vistas ×4 (alcance + rendimiento relativo)");
   ok(`crecimiento por tema: 8 esta semana vs 2 la anterior → ${g.growth_index}/100; puntaje con JEV 84 → ${topicScore(g, 84)}`);
 
   // Privacidad: sin nombres ni handles en títulos indexados.
@@ -207,6 +221,9 @@ async function main() {
   }
 
   console.log("\n3) Fuentes reales");
+  if (sourcesConfigured() && !LIVE) {
+    console.log("  · omitido para no gastar cuota (ejecuta con SMOKE_LIVE=1 para llamar a YouTube/Tavily)");
+  } else {
   const discovery = await collectSignals({ query: "AI agents for sales teams", networks: ["youtube", "linkedin", "instagram", "tiktok"], windowDays: 7, maxPerSource: 10 });
   for (const r of discovery.sources) console.log(`  · ${r.source}: ${r.status} (${r.count})${r.message ? ` — ${r.message}` : ""}`);
   if (discovery.signals.length) {
@@ -215,6 +232,7 @@ async function main() {
     console.log(`    top: [${s.network}] ${s.title.slice(0, 70)} · outlier ${s.outlier_score ?? "n/d"}`);
   } else {
     console.log("  · sin credenciales de fuentes: se desactivaron sin romper la búsqueda ✔");
+  }
   }
 
   console.log("\n4) Sensor de Comunidad (URL pública real)");
@@ -250,6 +268,8 @@ async function main() {
   if (!optionalEnv("GEMINI_API_KEY")) {
     await assert.rejects(enrichSignal(classifyCohort(english)[0]!), /GEMINI_API_KEY/);
     console.log("  · GEMINI_API_KEY no configurada: el motor responde con error claro ✔");
+  } else if (!LIVE) {
+    console.log("  · omitido para no gastar cuota de Gemini (ejecuta con SMOKE_LIVE=1)");
   } else if (reading) {
     const [signal] = classifyCohort([reading.signal]);
     const analysis = await enrichSignal(signal!, reading.content);

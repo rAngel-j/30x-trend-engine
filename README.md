@@ -50,7 +50,7 @@ Es **el hueco, no el taladro**: el equipo no recibe un dashboard para interpreta
 | **oEmbed** (YouTube, TikTok, Instagram) | Metadatos de los enlaces que pega el equipo | Protocolo oficial de embebido |
 | **Jina Reader** | Texto de artículos de la **web abierta** (blogs, medios, documentación) | Solo sitios públicos sin restricción. **Nunca** se usa sobre LinkedIn, Instagram ni TikTok |
 | **Comunidad 30X** | Enlace + texto de la publicación que la persona vio y pega a mano | Es un humano compartiendo contenido público, no un robot |
-| **Google Gemini 2.5 Flash** | Autopsia, JEV y guiones | Solo Structured Outputs validados |
+| **Google Gemini 3.8 Flash** | Autopsia, JEV y guiones | Solo Structured Outputs validados |
 
 **Nunca se usan** logins, cookies, cuentas de terceros, datos privados ni descargas de páginas de LinkedIn, Instagram o TikTok, ni directas ni a través de lectores o proxies de terceros: que lo haga otro servicio no lo vuelve legítimo. Cuando una red no expone una métrica de forma legal, el motor la deja vacía en lugar de inventarla.
 
@@ -120,7 +120,7 @@ Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de ≈ 97. Si no cambia,
 |---|---|---|
 | YouTube Data API | ≈ 816 unidades | 10.000 al día |
 | Tavily (profundidad `basic`) | ≈ 24 créditos | créditos mensuales gratuitos |
-| Gemini 2.5 Flash | ≈ 25-30 llamadas (1 de agrupación + 2-3 por tema) | cubierto por el plan gratuito |
+| Gemini 3.8 Flash | **3 solicitudes** (1 de agrupación + 2 de análisis en lote) | 20 solicitudes al día → unas 6 corridas |
 
 Las piezas ya analizadas no se vuelven a pagar. Frente a los servicios de scraping de miles de dólares al año, el costo operativo de una corrida semanal cabe en los planes gratuitos.
 
@@ -186,7 +186,7 @@ npm run dev
 
 Abre http://localhost:3000.
 
-Para verificar todo de una vez (tipos, prueba de humo y build de producción):
+Para verificar todo de una vez (tipos, prueba de humo y build de producción). No gasta cuota: las llamadas reales a YouTube, Tavily y Gemini solo corren con `SMOKE_LIVE=1`.
 
 ```bash
 npm run check
@@ -227,7 +227,7 @@ Contratos completos, ejemplos de respuesta y códigos de error: [`docs/API_CONTR
 | Endpoints en vivo | Códigos 200 / 400 / 401 / 404 / 503 según contrato, deduplicación de URLs, webhook real a Slack |
 | Interfaz | Revisada en navegador, de escritorio a 375 px sin scroll horizontal; foco visible y `prefers-reduced-motion` |
 
-**Pendiente de validar con claves reales**: una corrida real del Radar semanal, ingesta de YouTube y Tavily, análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
+**Validado con claves reales (YouTube + Gemini)**: corridas completas del Radar semanal sobre 96 piezas de YouTube, 9-10 temas, autopsias, JEV y guiones en 3 solicitudes, sin datos de identidad en la salida. **Pendiente**: ingesta de Tavily (LinkedIn, Instagram, TikTok), análisis de Gemini de punta a punta y la creación de páginas en Notion. El código y los contratos están listos; solo falta conectar las credenciales.
 
 ### Límites conocidos (y cómo se manejan)
 
@@ -260,4 +260,4 @@ supabase/migrations/              Esquema Postgres con índices por filtro
 docs/                             Arquitectura, contratos, ADN de marca y changelog
 ```
 
-**Stack**: Next.js 16 (App Router) · TypeScript estricto · Tailwind CSS 4 · Lucide · Supabase / SQLite nativo · Google Gemini 2.5 Flash (`@google/genai`, Structured Outputs) · Zod.
+**Stack**: Next.js 16 (App Router) · TypeScript estricto · Tailwind CSS 4 · Lucide · Supabase / SQLite nativo · Google Gemini 3.8 Flash (`@google/genai`, Structured Outputs) · Zod.

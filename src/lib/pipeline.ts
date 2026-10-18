@@ -4,11 +4,9 @@
 import type { TrendRepository } from "@/lib/db/supabase";
 import { optionalEnv } from "@/lib/env";
 import { errorMessage } from "@/lib/errors";
-import { mapWithConcurrency } from "@/lib/http";
-import { enrichSignal } from "@/lib/intelligence/analyze";
+import { analyzeBatch, enrichSignal } from "@/lib/intelligence/analyze";
 import type { TrendSignal } from "@/types/trends";
 
-const AI_CONCURRENCY = 3;
 
 /** Aplica la retención de 30 días de YouTube. Nunca bloquea la petición si falla. */
 export async function enforceRetention(repo: TrendRepository): Promise<void> {
@@ -40,6 +38,28 @@ export interface AnalysisSummary {
   skipped_reason: string | null;
 }
 
+/** Analiza varias señales guardadas en un solo lote (2 solicitudes) y persiste cada resultado. */
+export async function analyzeStoredBatch(
+  repo: TrendRepository,
+  signals: TrendSignal[],
+  stages: Map<string, TrendSignal["stage"]> = new Map(),
+): Promise<TrendSignal[]> {
+  if (signals.length === 0) return [];
+  const outcomes = await analyzeBatch(signals.map((signal) => ({ signal, stage: stages.get(signal.id) })));
+  const results: TrendSignal[] = [];
+  for (const [i, signal] of signals.entries()) {
+    const outcome = outcomes[i];
+    if (outcome?.ok) {
+      results.push(await repo.saveAnalysis(signal.id, outcome.analysis));
+    } else {
+      const message = outcome?.error ?? "Sin resultado";
+      await repo.markAnalysisFailed(signal.id, message);
+      results.push({ ...signal, analysis_status: "failed", analysis_error: message });
+    }
+  }
+  return results;
+}
+
 /** Analiza las `top` señales pendientes con mayor prioridad. Devuelve las señales actualizadas por id. */
 export async function analyzeTopPending(
   repo: TrendRepository,
@@ -57,7 +77,7 @@ export async function analyzeTopPending(
     .sort((a, b) => b.priority_score - a.priority_score)
     .slice(0, top);
 
-  const results = await mapWithConcurrency(candidates, AI_CONCURRENCY, (s) => analyzeStoredSignal(repo, s));
+  const results = await analyzeStoredBatch(repo, candidates);
   for (const r of results) updated.set(r.id, r);
   const analyzed = results.filter((r) => r.analysis_status === "analyzed").length;
   return {

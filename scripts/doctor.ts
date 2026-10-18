@@ -29,8 +29,9 @@ const CHECKS: Check[] = [
     vars: ["GEMINI_API_KEY"],
     run: async () => {
       const ai = new GoogleGenAI({ apiKey: optionalEnv("GEMINI_API_KEY")! });
-      const model = await ai.models.get({ model: GEMINI_MODEL() });
-      return `modelo ${model.name ?? GEMINI_MODEL()} disponible`;
+      // Generar de verdad: un modelo puede existir (models.get) y no estar habilitado para tu cuenta.
+      const res = await ai.models.generateContent({ model: GEMINI_MODEL(), contents: "Responde solo: ok", config: { maxOutputTokens: 5 } });
+      return `${GEMINI_MODEL()} genera respuestas (${res.modelVersion ?? "ok"})`;
     },
   },
   {

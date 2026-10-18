@@ -36,7 +36,7 @@ Estás construyendo una plataforma de inteligencia editorial en tiempo real y "P
 
   3. `Jina Reader API (r.jina.ai)` + `oEmbed`: Para el módulo "Sensor de Comunidad 30X", permitiendo analizar en vivo cualquier URL pública que el equipo pegue o envíe por webhook.
 
-- **Motor de IA:** Google Gemini API (`@google/genai`, modelo `gemini-2.5-flash`) usando exclusivamente **Structured Outputs (`responseSchema`)**.
+- **Motor de IA:** Google Gemini API (`@google/genai`, modelo `gemini-2.5-flash` — retirado para cuentas nuevas en 2026, se usa `gemini-3.8-flash`; ver `docs/ARCHITECTURE.md` ADR 9) usando exclusivamente **Structured Outputs (`responseSchema`)**.
 
 ## 4. Lógica de Negocio que el Agente DEBE Implementar
 

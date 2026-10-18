@@ -2,6 +2,26 @@
 
 Registro de lo construido en cada fase. Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.4.0] — 2026-10-17 · Primera prueba con claves reales
+
+Primera corrida real con YouTube y Gemini. Destapó problemas que las pruebas sin claves no podían ver; todos corregidos y re-verificados en real.
+
+### Corregido
+- **Modelo:** `gemini-2.5-flash` ya no está disponible para cuentas nuevas (404 al generar). Pasa a `gemini-3.8-flash`, verificado con Structured Outputs. Desvío de la especificación documentado (ADR 9).
+- **Cuota de Gemini:** el plan gratuito de `gemini-3.8-flash` permite 20 solicitudes al día y el radar necesitaba ~30. Nuevo **análisis en lote** (`batch-analyzer.ts`): autopsia + JEV de todas las piezas en 1 solicitud y guiones en otra. Radar: 3 solicitudes; búsqueda: 3; Sensor: 2.
+- **Reintentos:** también ante 503 "alta demanda"; la cuota diaria agotada se detecta por el tiempo de espera ("retry in 19h…") y se responde de inmediato con el tiempo de renovación.
+- **Errores de Gemini** llegan con su mensaje (502) en vez de "Error interno".
+- **Diagnóstico:** `npm run doctor` comprueba que el modelo *genera*, no solo que existe (antes dio un falso OK).
+- **Contrarian obligatorio por tema:** los guiones obedecen la etapa del tema, no la de la pieza, y se vuelve a analizar una pieza guardada si su análisis no cumple la regla de su tema.
+- **Pieza representativa:** combina alcance y rendimiento relativo (`log10(vistas) + log2(outlier)`). Antes ganaba un video de 653 vistas ×4; ahora gana uno de 167 mil vistas ×10.
+- **Etapa coherente en la interfaz:** dentro de un tema solo se muestra la etapa del tema.
+- `npm run smoke` / `check` ya no gastan cuota: las llamadas reales solo corren con `SMOKE_LIVE=1`.
+
+### Verificado con datos reales
+- 3 corridas del radar (solo YouTube): 96 piezas, 8 semillas, 9-10 temas en ~2-3 min; 816 unidades de YouTube por corrida.
+- Última corrida: todos los temas analizados; el saturado con JEV ≥ 55 trae ángulo contrarian y el saturado con JEV 48 queda sin guiones, como manda el ADN.
+- Salida sin campos de identidad ni handles.
+
 ## [1.3.0] — 2026-10-17 · Radar semanal y cero datos personales
 
 Alineación con el planteamiento del reto: el entregable pide **temas** que crecen **esta semana** (no piezas sueltas) y la restricción 08 exige **nada de datos personales**.

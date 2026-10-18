@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { GoogleGenAI, type Schema } from "@google/genai";
 import type { z } from "zod";
 import { GEMINI_MODEL, requireEnv } from "@/lib/env";
-import { AiOutputError } from "@/lib/errors";
+import { AiOutputError, errorMessage, SourceError } from "@/lib/errors";
 import type { StagedSignal } from "@/types/trends";
 
 let client: GoogleGenAI | null = null;
@@ -17,11 +17,33 @@ function gemini(): GoogleGenAI {
   return client;
 }
 
-const MAX_RATE_RETRIES = 3;
+const MAX_RETRIES = 3;
+/** Esperas más largas que esto significan cuota diaria agotada: no tiene sentido reintentar. */
+const MAX_RETRY_WAIT_MS = 60_000;
+
+/** Lee "retry in 19h24m59s", "retry in 37s" o retryDelay "37s" → milisegundos. */
+export function parseRetryDelay(message: string): number | null {
+  const m = message.match(/retry(?:Delay)?["\s:]*(?:in\s*)?"?((?:\d+h)?(?:\d+m(?!s))?(?:\d+(?:\.\d+)?s)?)/i);
+  const text = m?.[1];
+  if (!text) return null;
+  const h = Number(text.match(/(\d+)h/)?.[1] ?? 0);
+  const min = Number(text.match(/(\d+)m(?!s)/)?.[1] ?? 0);
+  const sec = Number(text.match(/(\d+(?:\.\d+)?)s/)?.[1] ?? 0);
+  const ms = ((h * 60 + min) * 60 + sec) * 1000;
+  return ms > 0 ? ms : null;
+}
+
+function humanWait(ms: number): string {
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.round((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h} h ${m} min` : `${m} min`;
+}
 
 /**
- * El plan gratuito de Gemini limita peticiones por minuto. Ante un 429 / RESOURCE_EXHAUSTED se espera
- * lo que indique el proveedor ("retry in Ns") o un backoff creciente, y se reintenta.
+ * Reintentos ante problemas temporales de Gemini:
+ * - 429 por límite POR MINUTO: espera lo que indique el proveedor y reintenta.
+ * - 503 "alta demanda": backoff creciente (5 s, 10 s, 20 s).
+ * - Cuota DIARIA agotada (espera de horas): no reintenta y lo explica con el tiempo de renovación.
  */
 async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -29,12 +51,23 @@ async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
       return await call();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const rateLimited = /429|RESOURCE_EXHAUSTED|rate limit|quota/i.test(message);
-      // La cuota diaria agotada no se arregla esperando unos segundos.
-      const dailyQuota = /per ?day|PerDay/i.test(message);
-      if (!rateLimited || dailyQuota || attempt >= MAX_RATE_RETRIES) throw err;
-      const hinted = Number(message.match(/retry(?:Delay)?["\s:in]*"?(\d+(?:\.\d+)?)s/i)?.[1]);
-      const waitMs = Number.isFinite(hinted) && hinted > 0 ? Math.min(hinted * 1000 + 500, 60_000) : 5_000 * 2 ** attempt;
+      const status = (err as { status?: number }).status;
+      const rateLimited = status === 429 || /RESOURCE_EXHAUSTED|rate limit|quota/i.test(message);
+      const overloaded = status === 503 || /UNAVAILABLE|high demand|overloaded/i.test(message);
+      const hinted = parseRetryDelay(message);
+      const daily = rateLimited && hinted !== null && hinted > MAX_RETRY_WAIT_MS;
+
+      if (daily) {
+        throw new SourceError(
+          "Gemini",
+          `Se agotó la cuota diaria gratuita de ${GEMINI_MODEL()}. Se renueva en ${humanWait(hinted!)}. Para seguir hoy: activa facturación en Google AI Studio o usa otro modelo en GEMINI_MODEL.`,
+          429,
+        );
+      }
+      if ((!rateLimited && !overloaded) || attempt >= MAX_RETRIES) {
+        throw new SourceError("Gemini", errorMessage(err), typeof status === "number" ? status : undefined);
+      }
+      const waitMs = rateLimited && hinted !== null ? hinted + 500 : 5_000 * 2 ** attempt;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }

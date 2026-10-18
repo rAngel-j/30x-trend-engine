@@ -10,7 +10,7 @@ import type { BrandAdaptations, ForensicAutopsy, JevResult, StagedSignal } from 
 
 const str = (description: string): Schema => ({ type: Type.STRING, description });
 
-const ADAPTATION_SCHEMA: Schema = {
+export const ADAPTATION_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     andres_bilbao_reel: {
@@ -78,7 +78,7 @@ const ADAPTATION_SCHEMA: Schema = {
 
 const text = z.string().trim().min(1);
 
-const AdaptationValidator = z.object({
+export const AdaptationValidator = z.object({
   andres_bilbao_reel: z.object({
     hook: text,
     beats: z.array(z.object({ second: z.number().int().min(0).max(90), line: text, on_screen_text: text })).min(4).max(10),

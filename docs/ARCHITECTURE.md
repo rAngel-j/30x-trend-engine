@@ -170,11 +170,31 @@ flowchart TB
     F & A --> R["TrendAnalysis → saveAnalysis()"]
 ```
 
-- Modelo: `gemini-2.5-flash` (configurable con `GEMINI_MODEL`).
+- Modelo: `gemini-3.8-flash` (configurable con `GEMINI_MODEL`). Ver ADR 9.
 - Todas las llamadas usan `responseMimeType: application/json` + `responseSchema`; la respuesta se valida con Zod y se reintenta una vez si no cumple.
 - El score JEV final **no lo decide el modelo**: el modelo puntúa cada criterio y TypeScript aplica la ponderación documentada en `30X_BRAND_DNA.md`.
 - El adaptador lee `docs/30X_BRAND_DNA.md` en tiempo de ejecución: el equipo puede editar el ADN sin tocar código.
 - Si la etapa es `saturated`, el adaptador está obligado a devolver un `contrarian_angle`.
+
+### 5.1 Análisis en lote (cuota de Gemini)
+
+Verificado con una cuenta real: el plan gratuito de `gemini-3.8-flash` permite **20 solicitudes al día**. Analizar pieza por pieza (forense + JEV + guiones = 3 llamadas) hacía que un radar de 10 temas necesitara ~30. Por eso el cerebro trabaja **en lote**:
+
+```mermaid
+flowchart LR
+    I["N piezas (1-12)"] --> A["Llamada 1: autopsia 5D + JEV de todas"]
+    A --> W["JEV ponderado en código"]
+    W -- "JEV ≥ umbral" --> B["Llamada 2: guiones de todas las que pasan"]
+    W -- "< umbral" --> X["sin guiones"]
+```
+
+| Flujo | Solicitudes a Gemini |
+|---|---|
+| Radar semanal (10 temas) | 1 agrupación + 2 de análisis = **3** |
+| Búsqueda por tema (Top 5) | 1 traducción + 2 = **3** |
+| Sensor / "Analizar con IA" (1 pieza) | **2** |
+
+Con 20 solicitudes diarias alcanzan para unas 6 corridas del radar al día. Ante "alta demanda" (503) o el límite por minuto (429) se reintenta con espera; si la cuota **diaria** se agotó, se responde de inmediato con el tiempo de renovación, sin reintentos inútiles.
 
 ## 6. API Routes y Plug & Play (Fase 3)
 
@@ -293,7 +313,7 @@ flowchart TB
     C --> K["Gemini: agrupar piezas en temas<br/>(una sola llamada)"]
     K --> G["Crecimiento determinista por tema<br/>esta semana vs. la anterior"]
     G --> P["Top 12 por impulso"]
-    P --> A["enrichSignal() de la pieza<br/>más representativa de cada tema"]
+    P --> A["Análisis en lote de las piezas<br/>más representativas (2 solicitudes)"]
     A --> R["Puntaje final y Top 10"]
     R --> RT[("radar_runs + radar_topics")]
 ```
@@ -312,7 +332,7 @@ puntaje       = 0.5 · crecimiento + 0.2 · volumen + 0.3 · JEV
 ```
 Un tema que pasa de 2 a 8 piezas obtiene un crecimiento de 50 + 30·log2(9/3) ≈ 98. Si no cambia, se queda en 50.
 
-**Costo por corrida** (4 redes, 8 semillas): YouTube ≈ 816 unidades (8 % de la cuota diaria gratuita), Tavily ≈ 24 créditos en profundidad `basic`, Gemini ≈ 1 llamada de agrupación + 2-3 por tema analizado (≈ 25-30 en total, cubiertas por el plan gratuito). Las piezas ya analizadas no se vuelven a pagar.
+**Costo por corrida** (4 redes, 8 semillas): YouTube ≈ 816 unidades (8 % de la cuota diaria gratuita), Tavily ≈ 24 créditos en profundidad `basic`, Gemini **3 solicitudes** (1 agrupación + 2 de análisis en lote, §5.1). Las piezas ya analizadas no se vuelven a pagar.
 
 **Límites honestos:** los índices de búsqueda tardan en indexar, así que la semana en curso puede verse subrepresentada frente a la anterior (el crecimiento es conservador). Las piezas sin fecha no cuentan para el crecimiento.
 
@@ -356,4 +376,5 @@ Nunca imprime valores de claves: solo `OK`, `FALTA` o el error del proveedor. Sa
 | 5 | Adaptación solo si JEV ≥ umbral | Ahorra ~1/3 del costo de IA en piezas que no sirven a la audiencia LatAm. |
 | 6 | Jina Reader **solo para la web abierta** (blogs, medios, docs) | Pedirle a un tercero que descargue LinkedIn, Instagram o TikTok sigue siendo scraping de redes cuyos términos lo prohíben. En redes cerradas el Sensor usa solo oEmbed oficial, el índice de búsqueda y el texto que aporta la persona. |
 | 7 | Búsqueda bilingüe por defecto | La etapa `emerging` necesita comparar inglés vs. español; una sola consulta en español no puede detectarla. |
+| 9 | `gemini-3.8-flash` en lugar de `gemini-2.5-flash` | La especificación pedía 2.5-flash, pero Google ya no lo habilita para cuentas nuevas (404 al generar). 3.8-flash es el Flash estable vigente y se verificó con Structured Outputs. Se fija la versión en lugar de `gemini-flash-latest` para que los resultados sean reproducibles. |
 | 8 | Notion por descubrimiento de esquema | Cada equipo tiene su propia base de contenidos; exigir columnas fijas rompe el plug & play. |

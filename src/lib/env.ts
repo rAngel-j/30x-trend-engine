@@ -17,5 +17,6 @@ export function numberEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export const GEMINI_MODEL = () => optionalEnv("GEMINI_MODEL") ?? "gemini-2.5-flash";
+/** gemini-2.5-flash ya no está disponible para cuentas nuevas (404); 3.8-flash es el Flash estable vigente. */
+export const GEMINI_MODEL = () => optionalEnv("GEMINI_MODEL") ?? "gemini-3.8-flash";
 export const JEV_ADAPT_THRESHOLD = () => numberEnv("JEV_ADAPT_THRESHOLD", 55);

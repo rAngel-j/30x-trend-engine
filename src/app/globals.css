@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Paleta oficial 30X + derivados funcionales (docs/ARCHITECTURE.md §7) */
+@theme {
+  --color-crema: #f7f4ef;
+  --color-beige: #efece6;
+  --color-dorado: #e5a93c;
+  --color-dorado-hondo: #a8741a;
+  --color-carbon: #18181b;
+  --color-arena: #d8d1c4;
+  --color-tinta: #5e5a53;
+  --color-brote: #5c7f4f;
+  --color-ceniza: #8f8a82;
+  --color-alerta: #a3402b;
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  font-feature-settings: "tnum" 1;
+}
+
+body {
+  background: var(--color-crema);
+  color: var(--color-carbon);
+}
+
+/* Archivo ancho: cifras y titulares. Es el único gesto tipográfico enfático. */
+.wide {
+  font-stretch: 125%;
+}
+.semiwide {
+  font-stretch: 112%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-dorado);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-dorado) 45%, transparent);
+}
+
+dialog::backdrop {
+  background: rgb(24 24 27 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
